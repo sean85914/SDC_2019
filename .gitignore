@@ -7,3 +7,5 @@
 *.log
 *.zip
 *.bag
+devel/
+build/
