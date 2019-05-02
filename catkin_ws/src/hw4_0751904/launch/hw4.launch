@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="vo_position_mul" default="1.0"/>
+  <arg name="vo_orientation_mul" default="1.0"/>
+  <arg name="imu_orientation_mul" default="1.0"/>
+  <!-- Play bag-->
+  <node pkg="rosbag" type="play" name="player" args="$(find hw4_0751904)/bag/sdc_hw3.bag" required="true"/>
+  <!-- EKF -->
+  <include file="$(find robot_pose_ekf)/robot_pose_ekf.launch">
+    <arg name="vo_position_mul" value="$(arg vo_position_mul)"/>
+    <arg name="vo_orientation_mul" value="$(arg vo_orientation_mul)"/>
+    <arg name="imu_orientation_mul" value="$(arg imu_orientation_mul)"/>
+  </include>
+  <!-- Static transformation from base_footprint to imu -->
+  <node pkg="tf" type="static_transform_publisher" name="base_to_imu" args="0 0 0 0.03247118 -0.01122816 -0.00122502 0.99940885 base_footprint imu 100"/>
+  <!-- Visualization -->
+  <node pkg="hw4_0751904" type="plot_path" name="plot_path"/>
+</launch>
