@@ -1,8 +1,0 @@
-prefix=/home/sean/Downloads/SDC/catkin_ws/devel
-
-Name: hw3_0751904
-Description: Description of hw3_0751904
-Version: 0.0.0
-Cflags: 
-Libs: -L/home/sean/Downloads/SDC/catkin_ws/devel/lib 
-Requires: 
