@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<launch>
+  <param name="use_sim_time" value="true"/>
+  <arg name="lower_z" default="-1.5"/>
+  <arg name="upper_z" default="1.2"/>
+  <node pkg="hw5_0751904" type="hw5_node" name="hw5_node" output="screen" clear_params="true" required="true">
+    <param name="leaf_size" value="0.1"/>
+    <param name="radius" value="20.0"/>
+    <param name="lower_z" value="$(arg lower_z)"/>
+    <param name="upper_z" value="$(arg upper_z)"/>
+    <param name="save_pc" value="false"/>
+    <param name="draw_path" value="true"/>
+  </node>
+  <node pkg="rosbag" type="play" name="play" args="$(find hw5_0751904)/bag/sdc_hw5.bag -r 0.3 --clock" output="screen"/>
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find hw5_0751904)/config/rviz.rviz"/>
+</launch>
