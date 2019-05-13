@@ -7,5 +7,6 @@
 *.log
 *.zip
 *.bag
+*.pcd
 devel/
 build/
