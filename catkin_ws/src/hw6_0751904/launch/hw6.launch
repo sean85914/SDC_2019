@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="use_icp" default="true"/>
+  <arg name="leaf_size" default="0.2"/>
+  <arg name="plane_thin" default="0.4"/>
+  <arg name="lower_z" default="0.5"/>
+  <arg name="upper_z" default="1.5"/>
+  <node pkg="hw6_0751904" type="hw6_node" name="hw6_node" clear_params="true" output="screen">
+    <param name="use_icp" value="$(arg use_icp)"/>
+    <param name="leaf_size" value="$(arg leaf_size)"/>
+    <param name="plane_thin" value="$(arg plane_thin)"/>
+    <param name="lower_z" value="$(arg lower_z)"/>
+    <param name="upper_z" value="$(arg upper_z)"/>
+  </node>
+</launch>
