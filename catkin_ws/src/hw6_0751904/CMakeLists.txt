@@ -25,4 +25,8 @@ include_directories(
 add_executable(hw6_node src/hw6_node.cpp)
 target_link_libraries(hw6_node ${catkin_LIBRARIES})
 
+add_executable(icp_slam src/icp_slam.cpp)
+target_link_libraries(icp_slam ${catkin_LIBRARIES})
 
+add_executable(save_pcd src/save_pcd.cpp)
+target_link_libraries(save_pcd ${catkin_LIBRARIES})
