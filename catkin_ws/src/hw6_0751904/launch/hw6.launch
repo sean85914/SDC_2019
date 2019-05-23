@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
   <arg name="use_icp" default="true"/>
-  <arg name="leaf_size" default="0.2"/>
+  <arg name="leaf_size" default="0.1"/>
   <arg name="plane_thin" default="0.4"/>
   <arg name="lower_z" default="0.5"/>
   <arg name="upper_z" default="1.5"/>
@@ -11,5 +11,6 @@
     <param name="plane_thin" value="$(arg plane_thin)"/>
     <param name="lower_z" value="$(arg lower_z)"/>
     <param name="upper_z" value="$(arg upper_z)"/>
+    <param name="folder" value="pcd_sdc"/>
   </node>
 </launch>

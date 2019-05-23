@@ -44,7 +44,8 @@ class hw6{
   double lower_z; // z lower bound for pass through filter, from parameter server
   double upper_z; // z upper bound for pass through filter, from parameter server
   std::string package_path; // path for package
-  std::string file_path; // file_path = package_path + "/pcd/" + \count\ + ".pcd"
+  std::string folder;
+  std::string file_path; // file_path = package_path + folder + \count\ + ".pcd"
   PointXYZ map; // Pointcloud to publish as map
   PointXYZ input; // Input pointcloud, read from pcd file
   pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp; // ICP object
@@ -96,6 +97,7 @@ class hw6{
     if(!pnh_.getParam("plane_thin", plane_thin)) plane_thin = 0.3; ROS_INFO("plane_thin: %f", plane_thin);
     if(!pnh_.getParam("lower_z", lower_z)) lower_z = -5.0; ROS_INFO("lower_z: %f", lower_z);
     if(!pnh_.getParam("upper_z", upper_z)) upper_z = 5.0; ROS_INFO("upper_z: %f", upper_z);
+    if(!pnh_.getParam("folder", folder)) folder = 5.0; ROS_INFO("folder: %s", folder.c_str());
     pub_map = pnh_.advertise<sensor_msgs::PointCloud2>("map_pc", 1);
     // Set initial guess to identity
     guess = Eigen::Matrix4f::Identity();
@@ -154,7 +156,7 @@ void hw6::publishMap(void){
 bool hw6::start_process(void){
   while(count<=NUMOFSCAN){
     ROS_INFO("----------------- %d -----------------", count);
-    file_path = package_path + "/pcd/" + std::to_string(count) + ".pcd";
+    file_path = package_path + "/" + folder +"/" + std::to_string(count) + ".pcd";
     if(pcl::io::loadPCDFile<pcl::PointXYZ>(file_path, input) == -1){
       ROS_ERROR("Cannot find index %d, aborting...", count); return false;
     }
