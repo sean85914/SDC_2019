@@ -1,19 +1,27 @@
 <?xml version="1.0"?>
 <launch>
+  <arg name="use_sim_time" default="true"/>
   <arg name="use_icp" default="true"/>
   <arg name="have_odom" default="false"/>
+  <arg name="removeGround" default="false"/>
+  <arg name="point2point" default="true"/>
   <arg name="leaf_size" default="0.1"/>
   <arg name="plane_thin" default="0.4"/>
   <arg name="lower_z" default="0.5"/>
   <arg name="upper_z" default="1.5"/>
   <arg name="lower_r" default="1.0"/>
-  <arg name="upper_r" default="1"/>
-  <arg name="offline" default="10.0"/>
+  <arg name="upper_r" default="10.0"/>
+  <arg name="offline" default="1"/>
   <arg name="len_of_vec" default="10"/>
   <arg name="saveEvery" default="10"/>
+  <arg name="numofscan" default="0"/>
+  <arg name="folder" default="pcd"/>
+  <arg name="prefix" default=""/>
+  <param name="use_sim_time" value="$(arg use_sim_time)"/>
   <node pkg="hw6_0751904" type="icp_slam_main" name="icp_slam_main" clear_params="true" 
-        args=" $(arg offline)" output="screen">
+        args="$(arg offline)" output="screen" required="true">
     <param name="have_odom" value="$(arg have_odom)"/>
+    <param name="point2point" value="$(arg point2point)"/>
     <param name="use_icp" value="$(arg use_icp)"/>
     <param name="leaf_size" value="$(arg leaf_size)"/>
     <param name="plane_thin" value="$(arg plane_thin)"/>
@@ -21,8 +29,12 @@
     <param name="upper_z" value="$(arg upper_z)"/>
     <param name="lower_r" value="$(arg lower_r)"/>
     <param name="upper_r" value="$(arg upper_r)"/>
+    <param name="numofscan" value="$(arg numofscan)"/>
     <param name="len_of_vec" value="$(arg len_of_vec)"/>
     <param name="saveEvery" value="$(arg saveEvery)"/>
+    <param name="removeGround" value="$(arg removeGround)"/>
+    <param name="folder" value="$(arg folder)"/>
+    <param name="prefix" value="$(arg prefix)"/>
     <remap from="~velodyne_points" to="/velodyne_points"/>
   </node>
 </launch>

@@ -13,6 +13,8 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_conversions
 )
 
+set(CMAKE_BUILD_TYPE Release)
+
 #find_package(Boost REQUIRED)
 
 catkin_package(
