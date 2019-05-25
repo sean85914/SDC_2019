@@ -66,10 +66,12 @@ ICPSLAM::ICPSLAM(ros::NodeHandle nh, ros::NodeHandle pnh, bool offline):
     // ICP converge criteria
     if(use_icp){
       if(point2point){
+        icp.setMaxCorrespondenceDistance(1.0);
         icp.setMaximumIterations(500);
         icp.setTransformationEpsilon(1e-10);
         icp.setEuclideanFitnessEpsilon(1e-8);
       } else{
+        icp_plane.setMaxCorrespondenceDistance(1.0);
         icp_plane.setMaximumIterations(500);
         icp_plane.setTransformationEpsilon(1e-10);
         icp_plane.setEuclideanFitnessEpsilon(1e-8);
@@ -300,9 +302,14 @@ void ICPSLAM::cb_pointcloud(const sensor_msgs::PointCloud2ConstPtr msg){
       ne.setRadiusSearch(leaf_size*2);
       ne.compute(batch_normal);
       pcl::concatenateFields(batch_pc, batch_normal, batch_with_normal);
+      // Redundant
+      std::vector<int> _;
+      // Remove points with nan normals
+      pcl::removeNaNNormalsFromPointCloud(batch_with_normal, batch_with_normal, _);
       ne.setInputCloud(filtered_pc.makeShared());
       ne.compute(input_normal);
       pcl::concatenateFields(filtered_pc, input_normal, input_with_normal);
+      pcl::removeNaNNormalsFromPointCloud(input_with_normal, input_with_normal, _);
       guess(0, 3) += dx * (ros::Time::now() - last).toSec();
       guess(1, 3) += dy * (ros::Time::now() - last).toSec();
       // ICP
@@ -372,7 +379,7 @@ void ICPSLAM::saveMap(void){
 
 void ICPSLAM::mySigintHandler(int sig){
   ROS_WARN("Receive interrupt signal!");
-  if(!offline_) saveMap(); 
+  if(!offline_) {postprocessing(removeGround); saveMap(); publishMap(); ros::Duration(1.0).sleep();}
   pub_map.shutdown(); pub_path.shutdown(); if(!offline_) sub_pc.shutdown();
   if(have_odom) fin.close();
   ros::shutdown();
