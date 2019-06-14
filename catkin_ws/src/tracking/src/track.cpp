@@ -3,8 +3,8 @@
 Track::Track(ros::NodeHandle nh, ros::NodeHandle pnh): nh_(nh), pnh_(pnh){
 
   cloud_raw = pcl::PointCloud<pcl::PointXYZI>::Ptr (new pcl::PointCloud<pcl::PointXYZI> ());
-  cloud_filtered = pcl::PointCloud<pcl::PointXYZ>::Ptr (new pcl::PointCloud<pcl::PointXYZ> ());
-  cloud_inliers = pcl::PointCloud<pcl::PointXYZ>::Ptr (new pcl::PointCloud<pcl::PointXYZ> ());
+  cloud_filtered = pcl::PointCloud<pcl::PointXYZI>::Ptr (new pcl::PointCloud<pcl::PointXYZI> ());
+  cloud_inliers = pcl::PointCloud<pcl::PointXYZI>::Ptr (new pcl::PointCloud<pcl::PointXYZI> ());
 
   //last_frame.header.stamp = 0;
 
@@ -30,75 +30,68 @@ void Track::pointCloudPreprocessing(void){
   }
   mean = mean / points_num;
   double sd = std::sqrt(x_square/points_num - std::pow(mean, 2));
-  //ROS_INFO("sd: %f, mean: %f", sd, mean);
 
-  for(auto point : *cloud_raw){
-    point.intensity = (point.intensity - mean) / sd;
+  for(auto it=cloud_raw->points.begin(); it!=cloud_raw->points.end(); ++it){
+    it->intensity = (it->intensity - mean) / sd;
   }
-
-  mean = 0;
-  x_square = 0;
-  points_num = cloud_raw->size();
-  for(auto point : *cloud_raw){
-    x_square += std::pow(point.intensity, 2);
-    mean += point.intensity;
-  }
-  mean = mean / points_num;
-  sd = std::sqrt(x_square/points_num - std::pow(mean, 2));
-  ROS_INFO("sd: %f, mean: %f", sd, mean);
 
   // Pass Through filter
   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_pt(new pcl::PointCloud<pcl::PointXYZI>);
   pcl::PassThrough<pcl::PointXYZI> pt;
   pt.setInputCloud(cloud_raw);
   pt.setFilterFieldName("intensity");
-  pt.setFilterLimits(0, 0.2);
+  pt.setFilterLimits(-3.89, 0);
   pt.filter(*cloud_pt);
 
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_remove_i(new pcl::PointCloud<pcl::PointXYZ>);
+  sensor_msgs::PointCloud2 cluster_cloud;
+  pcl::toROSMsg(*cloud_pt, cluster_cloud);
+  cluster_cloud.header.frame_id = "velodyne";
+  filtered_pub.publish(cluster_cloud);
+
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_remove_i(new pcl::PointCloud<pcl::PointXYZI>);
   pcl::copyPointCloud(*cloud_pt, *cloud_remove_i);
   // Voxel grid downsampling
-  pcl::VoxelGrid<pcl::PointXYZ> vg;
+  pcl::VoxelGrid<pcl::PointXYZI> vg;
   vg.setInputCloud(cloud_remove_i);
   vg.setLeafSize (leaf_size, leaf_size, leaf_size);
 
   vg.filter(*cloud_filtered);
 
   // Ground removal
-  pcl::SACSegmentation<pcl::PointXYZ> seg;
+  pcl::SACSegmentation<pcl::PointXYZI> seg;
   pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
   pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
   seg.setOptimizeCoefficients(true);
   seg.setModelType(pcl::SACMODEL_PLANE);
   seg.setMethodType(pcl::SAC_RANSAC);
   seg.setMaxIterations(1000);
-  seg.setDistanceThreshold(0.25);
+  seg.setDistanceThreshold(0.3);
   // Segment the largest planar component from the remaining cloud
   seg.setInputCloud (cloud_filtered);
   seg.segment (*inliers, *coefficients);
 
   // Extract inliers from input cloud
-  pcl::ExtractIndices<pcl::PointXYZ> extract;
+  pcl::ExtractIndices<pcl::PointXYZI> extract;
   extract.setInputCloud(cloud_filtered);
   extract.setIndices(inliers);
   extract.setNegative(false);
   extract.filter(*cloud_inliers);
 
   // Remove inliers, extract the rest
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_remove_inliers(new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_remove_inliers(new pcl::PointCloud<pcl::PointXYZI>);
   extract.setNegative(true);
   extract.filter(*cloud_remove_inliers); 
   *cloud_filtered = *cloud_remove_inliers;
 
-  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
+  pcl::search::KdTree<pcl::PointXYZI>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZI>);
   tree->setInputCloud(cloud_filtered);
   // Clear old vector
   cluster_indices.clear();
   // Euclidean cluster
-  pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+  pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
   ec.setClusterTolerance(clusterTolerance); // 
   ec.setMinClusterSize(30);
-  ec.setMaxClusterSize(2500);
+  ec.setMaxClusterSize(1500);
   ec.setSearchMethod(tree);
   ec.setInputCloud(cloud_filtered);
   ec.extract(cluster_indices);
@@ -112,12 +105,19 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
   markerArray.markers.clear();
   pointCloudPreprocessing();
   int id_count = 0;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_clusters (new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_clusters (new pcl::PointCloud<pcl::PointXYZI>);
   for(std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it){
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZI>);
+    double mean = 0;
     for(std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit){
       cloud_cluster->points.push_back (cloud_filtered->points[*pit]);
     }
+
+    for(auto point : *cloud_cluster){
+      mean += point.intensity;
+    } 
+
+    mean /= cloud_cluster->size();
     *cloud_clusters += *cloud_cluster;
     vector_of_centroid voc;
     Eigen::Vector4f centroid;
@@ -137,7 +137,7 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
     marker.pose.position.z = centroid(2);
     marker.pose.orientation.w = 1.0f;
     marker.lifetime = ros::Duration(1.0f);
-    marker.text = std::to_string(marker.id);
+    marker.text = std::to_string(mean);
     markerArray.markers.push_back(marker);
   }
   sensor_msgs::PointCloud2 cluster_cloud;
@@ -145,7 +145,4 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
   cluster_cloud.header.frame_id = "velodyne";
   cluster_pub.publish(cluster_cloud);
   result_pub.publish(markerArray);
-
-
-
 }

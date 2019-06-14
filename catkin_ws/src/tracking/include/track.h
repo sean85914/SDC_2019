@@ -51,8 +51,8 @@ class Track{
   visualization_msgs::MarkerArray markerArray;
   std::vector<pcl::PointIndices> cluster_indices_last, cluster_indices;
   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_raw;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered;
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_inliers;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_inliers;
   void initMatrix(void);
   void pointCloudPreprocessing(void);
   void cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg);
