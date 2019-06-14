@@ -19,13 +19,40 @@ Track::Track(ros::NodeHandle nh, ros::NodeHandle pnh): nh_(nh), pnh_(pnh){
 
 void Track::pointCloudPreprocessing(void){
   //ROS_INFO("Start pointcloud preprocessing...");
-  
+
+  // Calculate the mean and sd of point_raw's intensity
+  double mean = 0;
+  double x_square = 0;
+  size_t points_num = cloud_raw->size();
+  for(auto point : *cloud_raw){
+    x_square += std::pow(point.intensity, 2);
+    mean += point.intensity;
+  }
+  mean = mean / points_num;
+  double sd = std::sqrt(x_square/points_num - std::pow(mean, 2));
+  //ROS_INFO("sd: %f, mean: %f", sd, mean);
+
+  for(auto point : *cloud_raw){
+    point.intensity = (point.intensity - mean) / sd;
+  }
+
+  mean = 0;
+  x_square = 0;
+  points_num = cloud_raw->size();
+  for(auto point : *cloud_raw){
+    x_square += std::pow(point.intensity, 2);
+    mean += point.intensity;
+  }
+  mean = mean / points_num;
+  sd = std::sqrt(x_square/points_num - std::pow(mean, 2));
+  ROS_INFO("sd: %f, mean: %f", sd, mean);
+
   // Pass Through filter
   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_pt(new pcl::PointCloud<pcl::PointXYZI>);
   pcl::PassThrough<pcl::PointXYZI> pt;
   pt.setInputCloud(cloud_raw);
   pt.setFilterFieldName("intensity");
-  pt.setFilterLimits(0, 0.1);
+  pt.setFilterLimits(0, 0.2);
   pt.filter(*cloud_pt);
 
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_remove_i(new pcl::PointCloud<pcl::PointXYZ>);

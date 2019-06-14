@@ -111,7 +111,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-#  INCLUDE_DIRS include
+   INCLUDE_DIRS include
 #  LIBRARIES tracking
 #  CATKIN_DEPENDS compressed_image_transport cv_bridge geometry_msgs image_transport pcl_conversions pcl_ros roscpp roslib rospy sensor_msgs std_msgs
 #  DEPENDS system_lib
@@ -124,7 +124,7 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
+  include
   ${catkin_INCLUDE_DIRS}
 )
 
@@ -158,7 +158,7 @@ include_directories(
 #   ${catkin_LIBRARIES}
 # )
 
-add_executable(tracking_node src/track.h src/track.cpp src/main.cpp)
+add_executable(tracking_node src/track.cpp src/main.cpp)
 add_dependencies(tracking_node ${visualizer_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(tracking_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} )
 
