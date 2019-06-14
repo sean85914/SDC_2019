@@ -3,8 +3,10 @@
 Track::Track(ros::NodeHandle nh, ros::NodeHandle pnh): nh_(nh), pnh_(pnh){
 
   cloud_raw = pcl::PointCloud<pcl::PointXYZI>::Ptr (new pcl::PointCloud<pcl::PointXYZI> ());
-  cloud_filtered = pcl::PointCloud<pcl::PointXYZI>::Ptr (new pcl::PointCloud<pcl::PointXYZI> ());
-  cloud_inliers = pcl::PointCloud<pcl::PointXYZI>::Ptr (new pcl::PointCloud<pcl::PointXYZI> ());
+  cloud_filtered = pcl::PointCloud<pcl::PointXYZ>::Ptr (new pcl::PointCloud<pcl::PointXYZ> ());
+  cloud_inliers = pcl::PointCloud<pcl::PointXYZ>::Ptr (new pcl::PointCloud<pcl::PointXYZ> ());
+
+  //last_frame.header.stamp = 0;
 
   lidar_sub = nh_.subscribe("/points_raw", 1, &Track::cb_lidar, this);
   result_pub = pnh.advertise<visualization_msgs::MarkerArray>("text", 1);
@@ -12,21 +14,31 @@ Track::Track(ros::NodeHandle nh, ros::NodeHandle pnh): nh_(nh), pnh_(pnh){
   cluster_pub = pnh.advertise<sensor_msgs::PointCloud2>("cluster", 1);
   if(!pnh_.getParam("leaf_size", leaf_size)) leaf_size = 0.1f; ROS_INFO("leaf_size: %f", leaf_size);
   clusterTolerance = 0.5f;
-
   ROS_INFO("[%s] Node ready!", ros::this_node::getName().c_str());
 }
 
 void Track::pointCloudPreprocessing(void){
   //ROS_INFO("Start pointcloud preprocessing...");
   
+  // Pass Through filter
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_pt(new pcl::PointCloud<pcl::PointXYZI>);
+  pcl::PassThrough<pcl::PointXYZI> pt;
+  pt.setInputCloud(cloud_raw);
+  pt.setFilterFieldName("intensity");
+  pt.setFilterLimits(0, 0.1);
+  pt.filter(*cloud_pt);
+
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_remove_i(new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::copyPointCloud(*cloud_pt, *cloud_remove_i);
   // Voxel grid downsampling
-  pcl::VoxelGrid<pcl::PointXYZI> vg;
-  vg.setInputCloud(cloud_raw);
+  pcl::VoxelGrid<pcl::PointXYZ> vg;
+  vg.setInputCloud(cloud_remove_i);
   vg.setLeafSize (leaf_size, leaf_size, leaf_size);
+
   vg.filter(*cloud_filtered);
 
   // Ground removal
-  pcl::SACSegmentation<pcl::PointXYZI> seg;
+  pcl::SACSegmentation<pcl::PointXYZ> seg;
   pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
   pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
   seg.setOptimizeCoefficients(true);
@@ -39,24 +51,24 @@ void Track::pointCloudPreprocessing(void){
   seg.segment (*inliers, *coefficients);
 
   // Extract inliers from input cloud
-  pcl::ExtractIndices<pcl::PointXYZI> extract;
+  pcl::ExtractIndices<pcl::PointXYZ> extract;
   extract.setInputCloud(cloud_filtered);
   extract.setIndices(inliers);
   extract.setNegative(false);
   extract.filter(*cloud_inliers);
 
   // Remove inliers, extract the rest
-  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_remove_inliers(new pcl::PointCloud<pcl::PointXYZI>);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_remove_inliers(new pcl::PointCloud<pcl::PointXYZ>);
   extract.setNegative(true);
   extract.filter(*cloud_remove_inliers); 
   *cloud_filtered = *cloud_remove_inliers;
 
-  pcl::search::KdTree<pcl::PointXYZI>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZI>);
+  pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
   tree->setInputCloud(cloud_filtered);
   // Clear old vector
   cluster_indices.clear();
   // Euclidean cluster
-  pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
+  pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
   ec.setClusterTolerance(clusterTolerance); // 
   ec.setMinClusterSize(30);
   ec.setMaxClusterSize(2500);
@@ -73,14 +85,14 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
   markerArray.markers.clear();
   pointCloudPreprocessing();
   int id_count = 0;
-  std::vector<int> indexList;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_clusters (new pcl::PointCloud<pcl::PointXYZI>);
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_clusters (new pcl::PointCloud<pcl::PointXYZ>);
   for(std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it){
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZI>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
     for(std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit){
       cloud_cluster->points.push_back (cloud_filtered->points[*pit]);
     }
     *cloud_clusters += *cloud_cluster;
+    vector_of_centroid voc;
     Eigen::Vector4f centroid;
     pcl::compute3DCentroid(*cloud_cluster, centroid);
     double dist = std::sqrt(centroid(0)*centroid(0) + centroid(1)*centroid(1) + centroid(2)*centroid(2));
@@ -106,4 +118,7 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
   cluster_cloud.header.frame_id = "velodyne";
   cluster_pub.publish(cluster_cloud);
   result_pub.publish(markerArray);
+
+
+
 }

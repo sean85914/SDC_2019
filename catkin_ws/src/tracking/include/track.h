@@ -32,6 +32,8 @@
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 
+typedef std::vector<Eigen::Vector4f> vector_of_centroid;
+typedef std::vector<vector_of_centroid> vector_of_vectors;
 
 class Track{
  private:
@@ -41,14 +43,16 @@ class Track{
   double clusterTolerance;
   double lower_z;
   ros::NodeHandle nh_, pnh_;
+  vector_of_vectors vovs;
+  sensor_msgs::PointCloud2 last_frame;
   ros::Publisher result_pub, filtered_pub, cluster_pub;
   ros::Subscriber lidar_sub;
 
   visualization_msgs::MarkerArray markerArray;
-  std::vector<pcl::PointIndices> cluster_indices;
+  std::vector<pcl::PointIndices> cluster_indices_last, cluster_indices;
   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_raw;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_inliers;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered;
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_inliers;
   void initMatrix(void);
   void pointCloudPreprocessing(void);
   void cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg);
