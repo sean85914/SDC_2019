@@ -19,6 +19,7 @@
 #include <pcl/filters/filter.h> // RemoveNaN
 #include <pcl/kdtree/kdtree_flann.h> // KD tree
 #include <pcl/filters/extract_indices.h> // Indice filter
+#include <pcl/registration/icp.h> // ICP
 #include <pcl/segmentation/extract_clusters.h> // Euclidean Cluster Extraction
 #include <pcl/ModelCoefficients.h>
 #include <pcl/sample_consensus/method_types.h>
@@ -38,10 +39,16 @@ typedef std::vector<vector_of_centroid> vector_of_vectors;
 class Track{
  private:
   // Variables
+  bool firstProcess = true;
+  int frame_process_count;
   const int WIDTH = 1280, HEIGHT = 720;
+  const double distThres = 0.01;
   double leaf_size; // voxelgrid size, from parameter server
   double clusterTolerance;
   double lower_z;
+  const double MAX_HEIGHT = 0.2f;
+  const double MAX_DIS = 15.0f;
+  const double MIN_DIS = 2.0f;
   ros::NodeHandle nh_, pnh_;
   vector_of_vectors vovs;
   sensor_msgs::PointCloud2 last_frame;

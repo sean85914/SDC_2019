@@ -19,7 +19,19 @@ Track::Track(ros::NodeHandle nh, ros::NodeHandle pnh): nh_(nh), pnh_(pnh){
 
 void Track::pointCloudPreprocessing(void){
   //ROS_INFO("Start pointcloud preprocessing...");
-
+  // Remove tail of the car itself
+  pcl::KdTreeFLANN<pcl::PointXYZI> kdtree;
+  pcl::ExtractIndices<pcl::PointXYZI> extract;
+  pcl::PointXYZI origin; origin.x = 0.0f; origin.y = 0.0f; origin.z = 0.0f;
+  std::vector<int> pointIdxRadiusSearch; // Vector to save inlier indices
+  std::vector<float> pointRadiusSquaredDistance; // Vector to save corresponding distance
+  kdtree.setInputCloud(cloud_raw);
+  kdtree.radiusSearch(origin, MIN_DIS, pointIdxRadiusSearch, pointRadiusSquaredDistance);
+  extract.setInputCloud(cloud_raw);
+  boost::shared_ptr<std::vector<int>> indicesPtr (new std::vector<int> (pointIdxRadiusSearch));
+  extract.setIndices(indicesPtr);
+  extract.setNegative(true); // Inliers will be erase
+  extract.filter(*cloud_raw);
   // Calculate the mean and sd of point_raw's intensity
   double mean = 0;
   double x_square = 0;
@@ -71,7 +83,6 @@ void Track::pointCloudPreprocessing(void){
   seg.segment (*inliers, *coefficients);
 
   // Extract inliers from input cloud
-  pcl::ExtractIndices<pcl::PointXYZI> extract;
   extract.setInputCloud(cloud_filtered);
   extract.setIndices(inliers);
   extract.setNegative(false);
@@ -102,6 +113,8 @@ void Track::pointCloudPreprocessing(void){
 void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
   pcl::fromROSMsg(*lidarMsg, *cloud_raw);
   // clear marker array
+  // FIXME: the issue of appearance of old data can solved this way, but the marker will flash which is not comfortable
+  for(auto& marker: markerArray.markers) marker.action = visualization_msgs::Marker::DELETE; result_pub.publish(markerArray);
   markerArray.markers.clear();
   pointCloudPreprocessing();
   int id_count = 0;
@@ -118,13 +131,19 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
     } 
 
     mean /= cloud_cluster->size();
-    *cloud_clusters += *cloud_cluster;
+    
     vector_of_centroid voc;
     Eigen::Vector4f centroid;
     pcl::compute3DCentroid(*cloud_cluster, centroid);
     double dist = std::sqrt(centroid(0)*centroid(0) + centroid(1)*centroid(1) + centroid(2)*centroid(2));
-    //if(dist > 50.0f) continue; // Too far away, neglect
-    //ROS_INFO("%d\t%d", centroid_in_cam_pixel_coord.x, centroid_in_cam_pixel_coord.y);
+    if(dist > MAX_DIS) continue; // Too far away, neglect
+    if(centroid[2] > MAX_HEIGHT) continue; // Centroid too high, neglect
+    *cloud_clusters += *cloud_cluster; // XXX: neglected should not add into cloud_clusters? 
+    mean /= cloud_cluster->size();
+    *cloud_clusters += *cloud_cluster; // add cluster cloud
+    voc.push_back(centroid); // add centroid for comparison
+
+    // Visualize this cluster in Rviz
     visualization_msgs::Marker marker;
     marker.id = id_count; ++id_count;
     marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
@@ -136,8 +155,8 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
     marker.pose.position.y = centroid(1);
     marker.pose.position.z = centroid(2);
     marker.pose.orientation.w = 1.0f;
-    marker.lifetime = ros::Duration(1.0f);
-    marker.text = std::to_string(mean);
+    //marker.lifetime = ros::Duration(1.0f);
+    marker.text = std::to_string(centroid[2]);
     markerArray.markers.push_back(marker);
   }
   sensor_msgs::PointCloud2 cluster_cloud;
