@@ -6,6 +6,7 @@
 #include <ros/ros.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <cv_bridge/cv_bridge.h>
+#include <rviz_visual_tools/rviz_visual_tools.h>
 // MSG
 #include <sensor_msgs/PointCloud2.h>
 #include <visualization_msgs/Marker.h>
@@ -39,22 +40,33 @@ class Track{
  private:
   // Variables
   const int WIDTH = 1280, HEIGHT = 720;
+  const distThres = 0.01;
+  int frame_process_count;
+  bool firstProcess = true;
   double leaf_size; // voxelgrid size, from parameter server
   double clusterTolerance;
   double lower_z;
   ros::NodeHandle nh_, pnh_;
-  vector_of_vectors vovs;
-  sensor_msgs::PointCloud2 last_frame;
+  //vector_of_vectors vovs;
+  vector_of_centroid v_current, v_last;
   ros::Publisher result_pub, filtered_pub, cluster_pub;
   ros::Subscriber lidar_sub;
+  // For visualizing things in rviz
+  rviz_visual_tools::RvizVisualToolsPtr rviz_tools_;
 
   visualization_msgs::MarkerArray markerArray;
-  std::vector<pcl::PointIndices> cluster_indices_last, cluster_indices;
+  std::vector<pcl::PointIndices> cluster_indices;
   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_raw;
   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_filtered;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_inliers;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_current_frame;
+  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_last_frame;
+
+  pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
+
   void initMatrix(void);
   void pointCloudPreprocessing(void);
+  void comparison(void);
+  void plot_marker(void);
   void cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg);
  public:
   Track(ros::NodeHandle nh, ros::NodeHandle pnh);
