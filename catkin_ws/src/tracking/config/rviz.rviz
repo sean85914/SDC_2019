@@ -11,7 +11,7 @@ Panels:
         - /PointCloud23
         - /PointCloud24
       Splitter Ratio: 0.5
-    Tree Height: 728
+    Tree Height: 706
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -20,7 +20,7 @@ Panels:
       - /2D Nav Goal1
       - /Publish Point1
     Name: Tool Properties
-    Splitter Ratio: 0.5886790156364441
+    Splitter Ratio: 0.588679016
   - Class: rviz/Views
     Expanded:
       - /Current View1
@@ -31,8 +31,6 @@ Panels:
     Name: Time
     SyncMode: 0
     SyncSource: PointCloud2
-Preferences:
-  PromptSaveOnExit: true
 Toolbars:
   toolButtonStyle: 2
 Visualization Manager:
@@ -44,7 +42,7 @@ Visualization Manager:
       Color: 160; 160; 164
       Enabled: false
       Line Style:
-        Line Width: 0.029999999329447746
+        Line Width: 0.0299999993
         Value: Lines
       Name: Grid
       Normal Cell Count: 0
@@ -79,7 +77,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.019999999552965164
+      Size (m): 0.0199999996
       Style: Flat Squares
       Topic: /points_raw
       Unreliable: false
@@ -109,15 +107,15 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 100
+      Max Intensity: -0.0577240698
       Min Color: 0; 0; 0
-      Min Intensity: 0
+      Min Intensity: -1.06112862
       Name: PointCloud2
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.07999999821186066
+      Size (m): 0.0799999982
       Style: Flat Squares
       Topic: /tracking_node/cluster
       Unreliable: false
@@ -147,7 +145,7 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.05000000074505806
+      Size (m): 0.0500000007
       Style: Flat Squares
       Topic: /points_raw
       Unreliable: false
@@ -166,23 +164,282 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 63
+      Max Intensity: -0.0296732746
       Min Color: 0; 0; 0
-      Min Intensity: 0
+      Min Intensity: -1.05539393
       Name: PointCloud2
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.07999999821186066
+      Size (m): 0.0799999982
       Style: Flat Squares
       Topic: /tracking_node/filtered
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
+      Value: false
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /tracking_node/box
+      Name: MarkerArray
+      Namespaces:
+        box_0_0: true
+        box_0_1: true
+        box_0_10: true
+        box_0_11: true
+        box_0_2: true
+        box_0_3: true
+        box_0_4: true
+        box_0_5: true
+        box_0_6: true
+        box_0_7: true
+        box_0_8: true
+        box_0_9: true
+        box_10_0: true
+        box_10_1: true
+        box_10_10: true
+        box_10_11: true
+        box_10_2: true
+        box_10_3: true
+        box_10_4: true
+        box_10_5: true
+        box_10_6: true
+        box_10_7: true
+        box_10_8: true
+        box_10_9: true
+        box_11_0: true
+        box_11_1: true
+        box_11_10: true
+        box_11_11: true
+        box_11_2: true
+        box_11_3: true
+        box_11_4: true
+        box_11_5: true
+        box_11_6: true
+        box_11_7: true
+        box_11_8: true
+        box_11_9: true
+        box_12_0: true
+        box_12_1: true
+        box_12_10: true
+        box_12_11: true
+        box_12_2: true
+        box_12_3: true
+        box_12_4: true
+        box_12_5: true
+        box_12_6: true
+        box_12_7: true
+        box_12_8: true
+        box_12_9: true
+        box_13_0: true
+        box_13_1: true
+        box_13_10: true
+        box_13_11: true
+        box_13_2: true
+        box_13_3: true
+        box_13_4: true
+        box_13_5: true
+        box_13_6: true
+        box_13_7: true
+        box_13_8: true
+        box_13_9: true
+        box_14_0: true
+        box_14_1: true
+        box_14_10: true
+        box_14_11: true
+        box_14_2: true
+        box_14_3: true
+        box_14_4: true
+        box_14_5: true
+        box_14_6: true
+        box_14_7: true
+        box_14_8: true
+        box_14_9: true
+        box_15_0: true
+        box_15_1: true
+        box_15_10: true
+        box_15_11: true
+        box_15_2: true
+        box_15_3: true
+        box_15_4: true
+        box_15_5: true
+        box_15_6: true
+        box_15_7: true
+        box_15_8: true
+        box_15_9: true
+        box_16_0: true
+        box_16_1: true
+        box_16_10: true
+        box_16_11: true
+        box_16_2: true
+        box_16_3: true
+        box_16_4: true
+        box_16_5: true
+        box_16_6: true
+        box_16_7: true
+        box_16_8: true
+        box_16_9: true
+        box_17_0: true
+        box_17_1: true
+        box_17_10: true
+        box_17_11: true
+        box_17_2: true
+        box_17_3: true
+        box_17_4: true
+        box_17_5: true
+        box_17_6: true
+        box_17_7: true
+        box_17_8: true
+        box_17_9: true
+        box_18_0: true
+        box_18_1: true
+        box_18_10: true
+        box_18_11: true
+        box_18_2: true
+        box_18_3: true
+        box_18_4: true
+        box_18_5: true
+        box_18_6: true
+        box_18_7: true
+        box_18_8: true
+        box_18_9: true
+        box_19_0: true
+        box_19_1: true
+        box_19_10: true
+        box_19_11: true
+        box_19_2: true
+        box_19_3: true
+        box_19_4: true
+        box_19_5: true
+        box_19_6: true
+        box_19_7: true
+        box_19_8: true
+        box_19_9: true
+        box_1_0: true
+        box_1_1: true
+        box_1_10: true
+        box_1_11: true
+        box_1_2: true
+        box_1_3: true
+        box_1_4: true
+        box_1_5: true
+        box_1_6: true
+        box_1_7: true
+        box_1_8: true
+        box_1_9: true
+        box_20_0: true
+        box_20_1: true
+        box_20_10: true
+        box_20_11: true
+        box_20_2: true
+        box_20_3: true
+        box_20_4: true
+        box_20_5: true
+        box_20_6: true
+        box_20_7: true
+        box_20_8: true
+        box_20_9: true
+        box_2_0: true
+        box_2_1: true
+        box_2_10: true
+        box_2_11: true
+        box_2_2: true
+        box_2_3: true
+        box_2_4: true
+        box_2_5: true
+        box_2_6: true
+        box_2_7: true
+        box_2_8: true
+        box_2_9: true
+        box_3_0: true
+        box_3_1: true
+        box_3_10: true
+        box_3_11: true
+        box_3_2: true
+        box_3_3: true
+        box_3_4: true
+        box_3_5: true
+        box_3_6: true
+        box_3_7: true
+        box_3_8: true
+        box_3_9: true
+        box_4_0: true
+        box_4_1: true
+        box_4_10: true
+        box_4_11: true
+        box_4_2: true
+        box_4_3: true
+        box_4_4: true
+        box_4_5: true
+        box_4_6: true
+        box_4_7: true
+        box_4_8: true
+        box_4_9: true
+        box_5_0: true
+        box_5_1: true
+        box_5_10: true
+        box_5_11: true
+        box_5_2: true
+        box_5_3: true
+        box_5_4: true
+        box_5_5: true
+        box_5_6: true
+        box_5_7: true
+        box_5_8: true
+        box_5_9: true
+        box_6_0: true
+        box_6_1: true
+        box_6_10: true
+        box_6_11: true
+        box_6_2: true
+        box_6_3: true
+        box_6_4: true
+        box_6_5: true
+        box_6_6: true
+        box_6_7: true
+        box_6_8: true
+        box_6_9: true
+        box_7_0: true
+        box_7_1: true
+        box_7_10: true
+        box_7_11: true
+        box_7_2: true
+        box_7_3: true
+        box_7_4: true
+        box_7_5: true
+        box_7_6: true
+        box_7_7: true
+        box_7_8: true
+        box_7_9: true
+        box_8_0: true
+        box_8_1: true
+        box_8_10: true
+        box_8_11: true
+        box_8_2: true
+        box_8_3: true
+        box_8_4: true
+        box_8_5: true
+        box_8_6: true
+        box_8_7: true
+        box_8_8: true
+        box_8_9: true
+        box_9_0: true
+        box_9_1: true
+        box_9_10: true
+        box_9_11: true
+        box_9_2: true
+        box_9_3: true
+        box_9_4: true
+        box_9_5: true
+        box_9_6: true
+        box_9_7: true
+        box_9_8: true
+        box_9_9: true
+      Queue Size: 100
       Value: true
   Enabled: true
   Global Options:
@@ -199,10 +456,7 @@ Visualization Manager:
     - Class: rviz/FocusCamera
     - Class: rviz/Measure
     - Class: rviz/SetInitialPose
-      Theta std deviation: 0.2617993950843811
       Topic: /initialpose
-      X std deviation: 0.5
-      Y std deviation: 0.5
     - Class: rviz/SetGoal
       Topic: /move_base_simple/goal
     - Class: rviz/PublishPoint
@@ -212,25 +466,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 44.55574035644531
+      Distance: 44.5557404
       Enable Stereo Rendering:
-        Stereo Eye Separation: 0.05999999865889549
+        Stereo Eye Separation: 0.0599999987
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -4.89462947845459
-        Y: -4.149048328399658
-        Z: 3.371053695678711
+        X: -4.89462948
+        Y: -4.14904833
+        Z: 3.3710537
       Focal Shape Fixed Size: true
-      Focal Shape Size: 0.05000000074505806
+      Focal Shape Size: 0.0500000007
       Invert Z Axis: false
       Name: Current View
-      Near Clip Distance: 0.009999999776482582
-      Pitch: 0.6053988337516785
+      Near Clip Distance: 0.00999999978
+      Pitch: 0.680398762
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 5.618574619293213
+      Yaw: 5.36857033
     Saved: ~
 Window Geometry:
   Displays:
@@ -238,7 +492,7 @@ Window Geometry:
   Height: 1025
   Hide Left Dock: false
   Hide Right Dock: true
-  QMainWindow State: 000000ff00000000fd00000004000000000000016a00000363fc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003d00000363000000c900fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f000002c4fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a005600690065007700730000000028000002c4000000a400fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000073d0000003efc0100000002fb0000000800540069006d006501000000000000073d000002eb00fffffffb0000000800540069006d00650100000000000004500000000000000000000005cd0000036300000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000400000000000001930000035efc0200000008fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000006600fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c00610079007301000000310000035e000000e400fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f000002c4fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a005600690065007700730000000028000002c4000000c200fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000073d00000046fc0100000002fb0000000800540069006d006501000000000000073d000003de00fffffffb0000000800540069006d00650100000000000004500000000000000000000005a20000035e00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
@@ -248,5 +502,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1853
-  X: 67
-  Y: 27
+  X: 89
+  Y: 33

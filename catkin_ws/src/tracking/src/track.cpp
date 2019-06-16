@@ -9,14 +9,16 @@ Track::Track(ros::NodeHandle nh, ros::NodeHandle pnh): nh_(nh), pnh_(pnh){
   cloud_last_frame = PointCloudXYZIPtr (new PointCloudXYZI ());
   // Subscriber and Publisher
   lidar_sub = nh_.subscribe("/points_raw", 1, &Track::cb_lidar, this);
-  result_pub = pnh.advertise<visualization_msgs::MarkerArray>("text", 1);
-  filtered_pub = pnh.advertise<sensor_msgs::PointCloud2>("filtered", 1);
-  cluster_pub = pnh.advertise<sensor_msgs::PointCloud2>("cluster", 1);
+  result_pub = pnh_.advertise<visualization_msgs::MarkerArray>("text", 1);
+  filtered_pub = pnh_.advertise<sensor_msgs::PointCloud2>("filtered", 1);
+  cluster_pub = pnh_.advertise<sensor_msgs::PointCloud2>("cluster", 1);
+  bb_pub = pnh_.advertise<visualization_msgs::MarkerArray>("box", 1);
   // ICP converge criteria
   icp.setMaximumIterations(100);
   icp.setTransformationEpsilon(1e-3);
   icp.setEuclideanFitnessEpsilon(1e-3);
   // Get parameters from launch file
+
   if(!pnh_.getParam("leaf_size", leaf_size)) leaf_size = 0.1f; ROS_INFO("leaf_size: %f", leaf_size);
   if(!pnh_.getParam("clusterDistThres", clusterDistThres)) clusterDistThres = 30.0f; ROS_INFO("clusterDistThres: %f", clusterDistThres);
   if(!pnh_.getParam("centroidDistThres", centroidDistThres)) centroidDistThres = 1.0f; ROS_INFO("centroidDistThres: %f", centroidDistThres);
@@ -35,6 +37,7 @@ void Track::process_data(void){
   while(TupleVector.size() == 0 and ros::ok()){
     ROS_INFO("No enough data receive yet!");
     ros::Duration(0.3).sleep();
+
   }
   ROS_INFO("Start processing"); 
   ros::Time total_time = ros::Time::now();
@@ -57,7 +60,7 @@ void Track::process_data(void){
     // Rest Process
     else if(TupleVector.size() > 1){
       ros::Time time_start = ros::Time::now();
-      ROS_INFO("process_data, size:%d", TupleVector.size());
+      ROS_INFO("process_data, size:%d", (int)TupleVector.size());
       DataTuple tuple_target = TupleVector.at(1);
       Time time_target = get<0>(tuple_target);
       CentroidVector centV_target = get<1>(tuple_target);
@@ -99,7 +102,7 @@ void Track::process_data(void){
         }
       }
       RVector.push_back(rv);
-      ROS_INFO("%d clusters are matched!, %d cluster aren't matched", rv.size() - no_match_count, no_match_count);
+      ROS_INFO("%d clusters are matched!, %d cluster aren't matched", (int)rv.size() - no_match_count, no_match_count);
       // Remove the first element
       TupleVector.erase(TupleVector.begin());
     }
@@ -204,4 +207,39 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
 
   Time time_end = Time::now();
   cout << "PointCloud Filtering Process Time " << time_end-time_start << endl;
+}
+
+void Track::drawBoundingBox(vector<PointCloud<PointXYZI>> pcVec){
+  visualization_msgs::MarkerArray boxArray;
+  for(size_t i=0; i<pcVec.size(); ++i){
+    PointXYZI minPoint, maxPoint;
+    getMinMax3D(pcVec[i], minPoint, maxPoint);
+    visualization_msgs::Marker bb;
+    bb.header.frame_id = "velodyne";
+    bb.ns = "box_" + std::to_string((int)i);
+    bb.id = (int)i;
+    bb.type = visualization_msgs::Marker::LINE_STRIP;
+    bb.action = visualization_msgs::Marker::ADD;
+    bb.pose.orientation.w = 1.0f;
+    bb.scale.x = 0.1f;
+    bb.color.r = bb.color.g = bb.color.b = bb.color.a = 1.0f;
+    geometry_msgs::Point A, B, C, D, E, F, G, H;
+    A.x = minPoint.x, A.y = minPoint.y, A.z = minPoint.z; 
+    B.x = maxPoint.x, B.y = minPoint.y, B.z = minPoint.z;
+    C.x = minPoint.x, C.y = maxPoint.y, C.z = minPoint.z;
+    D.x = minPoint.x, D.y = minPoint.y, D.z = maxPoint.z;
+    E.x = maxPoint.x, E.y = maxPoint.y, E.z = minPoint.z; 
+    F.x = maxPoint.x, F.y = minPoint.y, F.z = maxPoint.z;
+    G.x = minPoint.x, G.y = maxPoint.y, G.z = maxPoint.z;
+    H.x = maxPoint.x, H.y = maxPoint.y, H.z = maxPoint.z;
+    bb.points.push_back(A); bb.points.push_back(B); bb.points.push_back(E); bb.points.push_back(C); 
+    bb.points.push_back(A); bb.points.push_back(D); bb.points.push_back(F); bb.points.push_back(H); 
+    bb.points.push_back(G); bb.points.push_back(D); bb.points.push_back(F); bb.points.push_back(B); 
+    bb.points.push_back(E); bb.points.push_back(H); bb.points.push_back(G); bb.points.push_back(C); 
+    boxArray.markers.push_back(bb);
+  }
+  ROS_INFO("Cluster Size: %d", (int)pcVec.size());
+  ROS_INFO("Marker Array Size: %d", (int)boxArray.markers.size());
+  ROS_INFO("Marker Point Size: %d", (int)boxArray.markers[0].points.size());
+  bb_pub.publish(boxArray);
 }
