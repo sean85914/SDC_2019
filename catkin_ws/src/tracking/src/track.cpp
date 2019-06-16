@@ -52,14 +52,19 @@ void Track::process_data(void){
     tf = icp.getFinalTransformation();
     // Find centroid pair 
     int count = 0;
+    ResultVector rv;
     for(auto cc : centV_current){
       for(auto cl : centV_last){
         double dist = sqrt(pow(cc(0)-cl(0), 2) + pow(cc(1)-cl(1), 2) + pow(cc(2)-cl(2), 2));
         if(dist < centroidDistThres and firstProcess){
           ResultTuple t = make_tuple(time_current, count, cc);
+          rv.push_back(t);
+          count ++;
         }
       }
     }
+    RVector.push_back(rv);
+    ROS_INFO("%d clusters are matched!", count);
 
 
 

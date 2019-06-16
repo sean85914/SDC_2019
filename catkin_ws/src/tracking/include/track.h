@@ -61,6 +61,7 @@ class Track{
   double lower_z;
   ros::NodeHandle nh_, pnh_;
   DataTupleVector TupleVector;
+  ResultVectors RVector;
   ros::Publisher result_pub, filtered_pub, cluster_pub;
   ros::Subscriber lidar_sub;
 
