@@ -74,21 +74,32 @@ void Track::process_data(void){
       cout << "ICP spent time: " << ros::Time::now() - icp_t << endl;
       // Find centroid pair 
       ResultVector rv;
+      int no_match_count = 0;
       ros::Time t = ros::Time::now();
-      for(int count=0; count < centV_target.size(); ++count){
-        for(auto cl : centV_source){
-          Vector4f cc = centV_target.at(count);
-          double dist = sqrt(pow(cc(0)-cl(0), 2) + pow(cc(1)-cl(1), 2) + pow(cc(2)-cl(2), 2));
+      for(int target_count=0; target_count < centV_target.size(); ++target_count){
+        ResultVector v_last = RVector.back();
+        int idMax = get<1>(v_last.at(v_last.size() - 1));
+        bool match = false;
+        Vector4f ct = centV_target.at(target_count);
+        for(int source_count=0; source_count < centV_source.size(); ++source_count){
+          Vector4f cs = centV_source.at(source_count);
+          double dist = sqrt(pow(ct(0)-cs(0), 2) + pow(ct(1)-cs(1), 2) + pow(ct(2)-cs(2), 2));
           if(dist < centroidDistThres){
-            ResultTuple t = make_tuple(time_target, count, cc, clusV_target.at(count));
+            match = true;
+            int id = get<1>(v_last.at(source_count));
+            ResultTuple t = make_tuple(time_target, id, ct, clusV_target.at(target_count));
             rv.push_back(t);
           }
         }
+        if(!match){// Cluster that isn't existed at last frame
+          int id = idMax + no_match_count + 1;
+          ResultTuple t = make_tuple(time_target, id, ct, clusV_target.at(target_count));
+          rv.push_back(t);
+          no_match_count++;
+        }
       }
       RVector.push_back(rv);
-      ROS_INFO("%d clusters are matched!", rv.size());
-      cout << "Data Process Time " << ros::Time::now()-time_start << endl;
-      cout << "Data Matching Time " << ros::Time::now()-t << endl;
+      ROS_INFO("%d clusters are matched!, %d cluster aren't matched", rv.size() - no_match_count, no_match_count);
       // Remove the first element
       TupleVector.erase(TupleVector.begin());
     }
