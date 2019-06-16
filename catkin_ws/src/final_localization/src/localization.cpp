@@ -87,7 +87,7 @@ class Localization{
   const double INIT_LON = 120.997009277f; // Initial longiture, from slide
   const double INIT_ALT = 127.651f; // Initial altitude, from slide
   std::string filename; // Write file name
-  const std::string package_path = ros::package::getPath("final_localization");
+  const std::string package_path = ros::package::getPath("localization_13");
   const std::string FRAME = "map";
   const std::vector<std::string> pcd_name_vec = 
   {"first-0.pcd", "first-1.pcd", "first-2.pcd", "first-3.pcd", "first-4.pcd", "first-5.pcd",

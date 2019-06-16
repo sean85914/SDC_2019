@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
   <arg name="config_file" default="config.yaml"/>
-  <node pkg="final_localization" type="localization" name="localization" output="screen" clear_params="true">
-    <rosparam command="load" file="$(find final_localization)/config/$(arg config_file)"/>
+  <node pkg="localization_13" type="localization" name="localization" output="screen" clear_params="true">
+    <rosparam command="load" file="$(find localization_13)/config/$(arg config_file)"/>
   </node>
 </launch>
