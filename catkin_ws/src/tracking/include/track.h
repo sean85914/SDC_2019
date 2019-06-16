@@ -7,6 +7,7 @@
 #include <cv_bridge/cv_bridge.h>
 // MSG
 #include <sensor_msgs/PointCloud2.h>
+#include <geometry_msgs/Point.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 // PCL
@@ -14,6 +15,7 @@
 #include <pcl/conversions.h>
 #include <pcl/filters/voxel_grid.h> // VG
 #include <pcl/filters/passthrough.h>
+#include <pcl/common/common.h>
 #include <pcl/common/transforms.h> // Transform pointcloud
 #include <pcl/filters/filter.h> // RemoveNaN
 #include <pcl/kdtree/kdtree_flann.h> // KD tree
@@ -73,7 +75,7 @@ class Track{
   NodeHandle nh_, pnh_;
   DataTupleVector TupleVector;
   ResultVectors RVector;
-  Publisher result_pub, filtered_pub, cluster_pub;
+  Publisher result_pub, filtered_pub, cluster_pub, bb_pub;
   Subscriber lidar_sub;
 
   visualization_msgs::MarkerArray markerArray;
@@ -84,7 +86,7 @@ class Track{
   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_last_frame;
 
   pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
-
+  void drawBoundingBox(std::vector<pcl::PointCloud<pcl::PointXYZI>>);
   void cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg);
  public:
   Track(ros::NodeHandle nh, ros::NodeHandle pnh);
