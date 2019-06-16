@@ -21,7 +21,7 @@ def main():
     rospy.init_node("plot_gt")
     pub = rospy.Publisher("~ground_truth", Marker, queue_size = 10)
     rospack = rospkg.RosPack()
-    package_path = rospack.get_path('final')
+    package_path = rospack.get_path('final_localization')
     bag_num = int(sys.argv[1])
     print "bag num: ", bag_num
     if bag_num == 1:

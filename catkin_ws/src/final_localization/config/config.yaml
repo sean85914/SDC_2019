@@ -1,0 +1,7 @@
+use_icp: true
+save_pcd: false
+skip_num: 0
+radius: 60.0
+length: 150.0
+ndtResolution: 1.0
+ndtStepSize: 3.0

@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 #find_package(Boost REQUIRED)
 find_package(GeographicLib REQUIRED)
+set(CMAKE_BUILD_TYPE Release)
 
 catkin_package(
 )

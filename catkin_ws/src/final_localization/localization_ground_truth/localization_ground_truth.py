@@ -16,9 +16,9 @@ def main():
 	# Ground Truth and Measurement Path
 	file_gt = None
 	if args.bag_num == 1:
-		file_gt = '/home/sean/Downloads/SDC/catkin_ws/src/final/localization_ground_truth/localization_ground_truth_1.csv'
+		file_gt = '/home/sean/Downloads/SDC/catkin_ws/src/final_localization/localization_ground_truth/localization_ground_truth_1.csv'
 	elif args.bag_num == 2:
-		file_gt = '/home/sean/Downloads/SDC/catkin_ws/src/final/localization_ground_truth/localization_ground_truth_2.csv'
+		file_gt = '/home/sean/Downloads/SDC/catkin_ws/src/final_localization/localization_ground_truth/localization_ground_truth_2.csv'
 	#file_meas = '/home/sean/Downloads/SDC/catkin_ws/src/final/data.csv'
 	file_meas = args.file_name
 	
