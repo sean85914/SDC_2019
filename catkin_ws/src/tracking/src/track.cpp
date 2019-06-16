@@ -2,166 +2,207 @@
 
 Track::Track(ros::NodeHandle nh, ros::NodeHandle pnh): nh_(nh), pnh_(pnh){
 
-  cloud_raw = pcl::PointCloud<pcl::PointXYZI>::Ptr (new pcl::PointCloud<pcl::PointXYZI> ());
-  cloud_filtered = pcl::PointCloud<pcl::PointXYZI>::Ptr (new pcl::PointCloud<pcl::PointXYZI> ());
-  cloud_inliers = pcl::PointCloud<pcl::PointXYZI>::Ptr (new pcl::PointCloud<pcl::PointXYZI> ());
-
-  //last_frame.header.stamp = 0;
-
+  // Initialize point cloud
+  cloud_raw = PointCloudXYZIPtr (new PointCloudXYZI ());
+  cloud_filtered = PointCloudXYZIPtr (new PointCloudXYZI ());
+  cloud_current_frame = PointCloudXYZIPtr (new PointCloudXYZI ());
+  cloud_last_frame = PointCloudXYZIPtr (new PointCloudXYZI ());
+  // Subscriber and Publisher
   lidar_sub = nh_.subscribe("/points_raw", 1, &Track::cb_lidar, this);
   result_pub = pnh.advertise<visualization_msgs::MarkerArray>("text", 1);
   filtered_pub = pnh.advertise<sensor_msgs::PointCloud2>("filtered", 1);
   cluster_pub = pnh.advertise<sensor_msgs::PointCloud2>("cluster", 1);
+  // ICP converge criteria
+  icp.setMaximumIterations(100);
+  icp.setTransformationEpsilon(1e-3);
+  icp.setEuclideanFitnessEpsilon(1e-3);
+  // Get parameters from launch file
   if(!pnh_.getParam("leaf_size", leaf_size)) leaf_size = 0.1f; ROS_INFO("leaf_size: %f", leaf_size);
+  if(!pnh_.getParam("clusterDistThres", clusterDistThres)) clusterDistThres = 30.0f; ROS_INFO("clusterDistThres: %f", clusterDistThres);
+  if(!pnh_.getParam("centroidDistThres", centroidDistThres)) centroidDistThres = 1.0f; ROS_INFO("centroidDistThres: %f", centroidDistThres);
   clusterTolerance = 0.5f;
   ROS_INFO("[%s] Node ready!", ros::this_node::getName().c_str());
 }
 
-void Track::pointCloudPreprocessing(void){
-  //ROS_INFO("Start pointcloud preprocessing...");
-  // Remove tail of the car itself
-  pcl::KdTreeFLANN<pcl::PointXYZI> kdtree;
-  pcl::ExtractIndices<pcl::PointXYZI> extract;
-  pcl::PointXYZI origin; origin.x = 0.0f; origin.y = 0.0f; origin.z = 0.0f;
-  std::vector<int> pointIdxRadiusSearch; // Vector to save inlier indices
-  std::vector<float> pointRadiusSquaredDistance; // Vector to save corresponding distance
-  kdtree.setInputCloud(cloud_raw);
-  kdtree.radiusSearch(origin, MIN_DIS, pointIdxRadiusSearch, pointRadiusSquaredDistance);
-  extract.setInputCloud(cloud_raw);
-  boost::shared_ptr<std::vector<int>> indicesPtr (new std::vector<int> (pointIdxRadiusSearch));
-  extract.setIndices(indicesPtr);
-  extract.setNegative(true); // Inliers will be erase
-  extract.filter(*cloud_raw);
-  // Calculate the mean and sd of point_raw's intensity
-  double mean = 0;
-  double x_square = 0;
-  size_t points_num = cloud_raw->size();
-  for(auto point : *cloud_raw){
-    x_square += std::pow(point.intensity, 2);
-    mean += point.intensity;
+void Track::check_bag_has_end(void){
+  while(!startReceive){}
+  while((ros::Time::now() - startReceiveTime).toSec() < 1){}
+  bagHasEnd = true;
+  ROS_INFO("Bag Has Reached End!");
+}
+
+void Track::process_data(void){
+  while(TupleVector.size() == 0 and ros::ok()){
+    ROS_INFO("No enough data receive yet!");
+    ros::Duration(0.3).sleep();
+
   }
-  mean = mean / points_num;
-  double sd = std::sqrt(x_square/points_num - std::pow(mean, 2));
-
-  for(auto it=cloud_raw->points.begin(); it!=cloud_raw->points.end(); ++it){
-    it->intensity = (it->intensity - mean) / sd;
+  ROS_INFO("Start processing"); 
+  ros::Time total_time = ros::Time::now();
+  Matrix4f tf = Matrix4f::Identity(4, 4);
+  while(ros::ok()){
+    DataTuple tuple_source = TupleVector.front();
+    Time time_source = get<0>(tuple_source);
+    CentroidVector centV_source = get<1>(tuple_source);
+    ClusterVector clusV_source = get<2>(tuple_source);
+    // First Process
+    if(firstProcess){
+      ResultVector rv_first;
+      firstProcess = false;
+      for(int count=0; count<centV_source.size(); ++count){
+        ResultTuple rt = make_tuple(time_source, count, centV_source.at(count), clusV_source.at(count));
+        rv_first.push_back(rt);
+      }
+      RVector.push_back(rv_first);
+    }
+    // Rest Process
+    else if(TupleVector.size() > 1){
+      ros::Time time_start = ros::Time::now();
+      ROS_INFO("process_data, size:%d", TupleVector.size());
+      DataTuple tuple_target = TupleVector.at(1);
+      Time time_target = get<0>(tuple_target);
+      CentroidVector centV_target = get<1>(tuple_target);
+      ClusterVector clusV_target = get<2>(tuple_target);
+      PointCloudXYZIPtr cloud_source = get<3>(tuple_source);
+      PointCloudXYZIPtr cloud_target = get<3>(tuple_target);
+      // Find tf between two pointcloud
+      ros::Time icp_t = ros::Time::now();
+      PointCloudXYZI final_cloud;
+      icp.setInputSource(cloud_source);
+      icp.setInputTarget(cloud_target);
+      icp.align(final_cloud, tf);
+      tf = icp.getFinalTransformation();
+      cout << "ICP spent time: " << ros::Time::now() - icp_t << endl;
+      // Find centroid pair 
+      ResultVector rv;
+      int no_match_count = 0;
+      ros::Time t = ros::Time::now();
+      for(int target_count=0; target_count < centV_target.size(); ++target_count){
+        ResultVector v_last = RVector.back();
+        int idMax = get<1>(v_last.at(v_last.size() - 1));
+        bool match = false;
+        Vector4f ct = centV_target.at(target_count);
+        for(int source_count=0; source_count < centV_source.size(); ++source_count){
+          Vector4f cs = centV_source.at(source_count);
+          double dist = sqrt(pow(ct(0)-cs(0), 2) + pow(ct(1)-cs(1), 2) + pow(ct(2)-cs(2), 2));
+          if(dist < centroidDistThres){
+            match = true;
+            int id = get<1>(v_last.at(source_count));
+            ResultTuple t = make_tuple(time_target, id, ct, clusV_target.at(target_count));
+            rv.push_back(t);
+          }
+        }
+        if(!match){// Cluster that isn't existed at last frame
+          int id = idMax + no_match_count + 1;
+          ResultTuple t = make_tuple(time_target, id, ct, clusV_target.at(target_count));
+          rv.push_back(t);
+          no_match_count++;
+        }
+      }
+      RVector.push_back(rv);
+      ROS_INFO("%d clusters are matched!, %d cluster aren't matched", rv.size() - no_match_count, no_match_count);
+      // Remove the first element
+      TupleVector.erase(TupleVector.begin());
+    }
+    // Process the last element
+    else if(bagHasEnd){
+      ROS_INFO("All Data Are Processed");
+      break;
+    } 
   }
+}
 
-  // Pass Through filter
-  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_pt(new pcl::PointCloud<pcl::PointXYZI>);
-  pcl::PassThrough<pcl::PointXYZI> pt;
-  pt.setInputCloud(cloud_raw);
-  pt.setFilterFieldName("intensity");
-  pt.setFilterLimits(-3.89, 0);
-  pt.filter(*cloud_pt);
-
-  sensor_msgs::PointCloud2 cluster_cloud;
-  pcl::toROSMsg(*cloud_pt, cluster_cloud);
-  cluster_cloud.header.frame_id = "velodyne";
-  filtered_pub.publish(cluster_cloud);
-
-  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_remove_i(new pcl::PointCloud<pcl::PointXYZI>);
-  pcl::copyPointCloud(*cloud_pt, *cloud_remove_i);
+void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
+  if(!startReceive){
+    startReceiveTime = Time::now();
+    startReceive = true;
+  }
+  startReceiveTime = Time::now();
+  Time time_start = Time::now();
+  fromROSMsg(*lidarMsg, *cloud_raw);
   // Voxel grid downsampling
   pcl::VoxelGrid<pcl::PointXYZI> vg;
-  vg.setInputCloud(cloud_remove_i);
+  vg.setInputCloud(cloud_raw);
   vg.setLeafSize (leaf_size, leaf_size, leaf_size);
-
   vg.filter(*cloud_filtered);
-
   // Ground removal
-  pcl::SACSegmentation<pcl::PointXYZI> seg;
-  pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
-  pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
+  SACSegmentation<PointXYZI> seg;
+  PointIndices::Ptr inliers (new PointIndices);
+  ModelCoefficients::Ptr coefficients (new ModelCoefficients);
   seg.setOptimizeCoefficients(true);
-  seg.setModelType(pcl::SACMODEL_PLANE);
-  seg.setMethodType(pcl::SAC_RANSAC);
+  seg.setModelType(SACMODEL_PLANE);
+  seg.setMethodType(SAC_RANSAC);
   seg.setMaxIterations(1000);
-  seg.setDistanceThreshold(0.3);
-  // Segment the largest planar component from the remaining cloud
+  seg.setDistanceThreshold(0.25);
+  // Segment the largest planar component from the cloud
   seg.setInputCloud (cloud_filtered);
   seg.segment (*inliers, *coefficients);
-
   // Extract inliers from input cloud
+  PointCloudXYZIPtr cloud_inliers(new PointCloudXYZI);
+  ExtractIndices<PointXYZI> extract;
   extract.setInputCloud(cloud_filtered);
   extract.setIndices(inliers);
   extract.setNegative(false);
   extract.filter(*cloud_inliers);
-
-  // Remove inliers, extract the rest
-  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_remove_inliers(new pcl::PointCloud<pcl::PointXYZI>);
+  // Remove inliers
+  PointCloudXYZIPtr cloud_remove_inliers(new PointCloudXYZI);
   extract.setNegative(true);
   extract.filter(*cloud_remove_inliers); 
   *cloud_filtered = *cloud_remove_inliers;
-
-  pcl::search::KdTree<pcl::PointXYZI>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZI>);
+  // Calculate the value of mean and sd of intensity of cloud_filtered
+  double mean = 0, x_square = 0;
+  size_t points_num = cloud_filtered->size();
+  for(auto point : *cloud_filtered){
+    x_square += std::pow(point.intensity, 2);
+    mean += point.intensity;
+  }
+  mean /= points_num;
+  double sd = std::sqrt(x_square/points_num - std::pow(mean, 2));
+  // Normalize intensity
+  for(auto it=cloud_filtered->points.begin(); it!=cloud_filtered->points.end(); ++it){
+    it->intensity = (it->intensity - mean) / sd;
+  }
+  // Pass Through filter, pretain cloud with intensity within [-3.89, 0]
+  PointCloudXYZIPtr cloud_pt(new PointCloudXYZI);
+  PassThrough<PointXYZI> pt;
+  pt.setInputCloud(cloud_filtered);
+  pt.setFilterFieldName("intensity");
+  pt.setFilterLimits(-3.89, 0);
+  pt.filter(*cloud_filtered);
+  // Setup KD Tree
+  pcl::search::KdTree<PointXYZI>::Ptr tree (new pcl::search::KdTree<PointXYZI>);
   tree->setInputCloud(cloud_filtered);
   // Clear old vector
   cluster_indices.clear();
   // Euclidean cluster
-  pcl::EuclideanClusterExtraction<pcl::PointXYZI> ec;
+  EuclideanClusterExtraction<PointXYZI> ec;
   ec.setClusterTolerance(clusterTolerance); // 
-  ec.setMinClusterSize(30);
+  ec.setMinClusterSize(10);
   ec.setMaxClusterSize(1500);
   ec.setSearchMethod(tree);
   ec.setInputCloud(cloud_filtered);
   ec.extract(cluster_indices);
-  //ROS_INFO("Cluster size: %d", (int)cluster_indices.size());
-}
-
-
-void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
-  pcl::fromROSMsg(*lidarMsg, *cloud_raw);
-  // clear marker array
-  // FIXME: the issue of appearance of old data can solved this way, but the marker will flash which is not comfortable
-  for(auto& marker: markerArray.markers) marker.action = visualization_msgs::Marker::DELETE; result_pub.publish(markerArray);
-  markerArray.markers.clear();
-  pointCloudPreprocessing();
+  // Get cluster cloud
   int id_count = 0;
-  pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_clusters (new pcl::PointCloud<pcl::PointXYZI>);
-  for(std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it){
-    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZI>);
-    double mean = 0;
+  ClusterVector clus_vec;
+  CentroidVector cent_vec;
+  PointCloudXYZIPtr cloud_clusters (new PointCloudXYZI);
+  for(vector<PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it){
+    PointCloudXYZIPtr cloud_cluster (new PointCloudXYZI);
     for(std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit){
       cloud_cluster->points.push_back (cloud_filtered->points[*pit]);
     }
-
-    for(auto point : *cloud_cluster){
-      mean += point.intensity;
-    } 
-
-    mean /= cloud_cluster->size();
-    
-    vector_of_centroid voc;
-    Eigen::Vector4f centroid;
-    pcl::compute3DCentroid(*cloud_cluster, centroid);
-    double dist = std::sqrt(centroid(0)*centroid(0) + centroid(1)*centroid(1) + centroid(2)*centroid(2));
-    if(dist > MAX_DIS) continue; // Too far away, neglect
-    if(centroid[2] > MAX_HEIGHT) continue; // Centroid too high, neglect
-    *cloud_clusters += *cloud_cluster; // XXX: neglected should not add into cloud_clusters? 
-    mean /= cloud_cluster->size();
+    Vector4f centroid;
+    compute3DCentroid(*cloud_cluster, centroid);
+    double dist = sqrt(pow(centroid(0), 2) + pow(centroid(1), 2) + pow(centroid(2), 2));
+    if(dist > clusterDistThres) continue; // Too far away, neglect
+    clus_vec.push_back(*cloud_cluster);
+    cent_vec.push_back(centroid);
     *cloud_clusters += *cloud_cluster; // add cluster cloud
-    voc.push_back(centroid); // add centroid for comparison
-
-    // Visualize this cluster in Rviz
-    visualization_msgs::Marker marker;
-    marker.id = id_count; ++id_count;
-    marker.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
-    marker.action = visualization_msgs::Marker::ADD;
-    marker.header.frame_id = "velodyne";
-    marker.scale.z = 1.0f;
-    marker.color.r = marker.color.g = marker.color.b = marker.color.a = 1.0f;
-    marker.pose.position.x = centroid(0);
-    marker.pose.position.y = centroid(1);
-    marker.pose.position.z = centroid(2);
-    marker.pose.orientation.w = 1.0f;
-    //marker.lifetime = ros::Duration(1.0f);
-    marker.text = std::to_string(centroid[2]);
-    markerArray.markers.push_back(marker);
   }
-  sensor_msgs::PointCloud2 cluster_cloud;
-  pcl::toROSMsg(*cloud_clusters, cluster_cloud);
-  cluster_cloud.header.frame_id = "velodyne";
-  cluster_pub.publish(cluster_cloud);
-  result_pub.publish(markerArray);
+  DataTuple tuple = make_tuple(lidarMsg->header.stamp, cent_vec, clus_vec, cloud_filtered);
+  TupleVector.push_back(tuple);
+
+  Time time_end = Time::now();
+  cout << "PointCloud Filtering Process Time " << time_end-time_start << endl;
 }
