@@ -21,7 +21,9 @@ Track::Track(ros::NodeHandle nh, ros::NodeHandle pnh): nh_(nh), pnh_(pnh){
   if(!pnh_.getParam("leaf_size", leaf_size)) leaf_size = 0.1f; ROS_INFO("leaf_size: %f", leaf_size);
   if(!pnh_.getParam("clusterDistThres", clusterDistThres)) clusterDistThres = 30.0f; ROS_INFO("clusterDistThres: %f", clusterDistThres);
   if(!pnh_.getParam("centroidDistThres", centroidDistThres)) centroidDistThres = 1.0f; ROS_INFO("centroidDistThres: %f", centroidDistThres);
+  if(!pnh_.getParam("filename", filename)) filename="result"; ROS_INFO("filename: %s", filename);
   clusterTolerance = 0.5f;
+  writeFile.setFileName(package_path + "/" + filename + ".csv");
   ROS_INFO("[%s] Node ready!", ros::this_node::getName().c_str());
 }
 
@@ -84,6 +86,7 @@ void Track::process_data(void){
         Vector4f ct = centV_target.at(target_count);
         for(int source_count=0; source_count < centV_source.size(); ++source_count){
           Vector4f cs = centV_source.at(source_count);
+          cs = tf * cs;
           double dist = sqrt(pow(ct(0)-cs(0), 2) + pow(ct(1)-cs(1), 2) + pow(ct(2)-cs(2), 2));
           if(dist < centroidDistThres){
             match = true;
@@ -109,7 +112,7 @@ void Track::process_data(void){
       ROS_INFO("All Data Are Processed");
       break;
     }
-    drawBoundingBox(rv); 
+    plotResult(rv); 
   }
 }
 
@@ -205,11 +208,12 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
   cout << "PointCloud Filtering Process Time " << time_end-time_start << endl;
 }
 
-void Track::drawBoundingBox(ResultVector rv){
+void Track::plotResult(ResultVector rv){
   visualization_msgs::MarkerArray boxArray, idArray;
   PointCloudXYZI clusterCloud;
   for(size_t i=0; i<rv.size(); ++i){
     ResultTuple rt = rv.at(i);
+    ros::Time stamp = get<0>(rt);
     int id = get<1>(rt);
     Vector4f centroid = get<2>(rt);
     PointCloudXYZI pc = get<3>(rt);
@@ -255,6 +259,12 @@ void Track::drawBoundingBox(ResultVector rv){
     idMarker.lifetime = Duration(1.0f);
     idMarker.text = to_string(id);
     idArray.markers.push_back(idMarker);
+
+    writeFile << stamp
+              << id
+              << centroid(0)
+              << centroid(1)
+              << centroid(2) << endrow;
   }
   //ROS_INFO("Cluster Size: %d", (int)pcVec.size());
   //ROS_INFO("Marker Array Size: %d", (int)boxArray.markers.size());

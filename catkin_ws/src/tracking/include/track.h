@@ -3,6 +3,7 @@
 #include <algorithm> // find
 // ROS
 #include <ros/ros.h>
+#include <ros/package.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <cv_bridge/cv_bridge.h>
 // MSG
@@ -36,6 +37,8 @@
 #include <message_filters/sync_policies/approximate_time.h>
 // Sleep, just for debug
 #include <unistd.h>
+// Self Defined
+#include "csvfile.h"
 
 using namespace std;
 using namespace pcl;
@@ -47,7 +50,7 @@ typedef PointCloud<PointXYZI>::Ptr PointCloudXYZIPtr;
 // Data Structure
 typedef vector<PointCloudXYZI> ClusterVector;
 typedef vector<Vector4f> CentroidVector;
-typedef tuple<ros::Time, CentroidVector, ClusterVector, PointCloudXYZIPtr> DataTuple;
+typedef tuple<ros::Time, CentroidVector, ClusterVector, PointCloudXYZI> DataTuple;
 typedef vector<DataTuple> DataTupleVector;
 typedef tuple<ros::Time, int, Vector4f, PointCloudXYZI> ResultTuple;
 typedef vector<ResultTuple> ResultVector;
@@ -71,11 +74,15 @@ class Track{
   const double MAX_DIS = 15.0f;
   const double MIN_DIS = 2.0f;
 
+  const std::string package_path = ros::package::getPath("tracking");
+  string filename;
+  csvfile writeFile;
+
   Time startReceiveTime;
   NodeHandle nh_, pnh_;
   DataTupleVector TupleVector;
   ResultVectors RVector;
-  Publisher result_pub, filtered_pub, cluster_pub, bb_pub;
+  Publisher cluster_pub, bb_pub, id_pub;
   Subscriber lidar_sub;
 
   visualization_msgs::MarkerArray markerArray;
@@ -86,7 +93,7 @@ class Track{
   pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_last_frame;
 
   pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
-  void drawBoundingBox(std::vector<pcl::PointCloud<pcl::PointXYZI>>);
+  void plotResult(ResultVector rv);
   void cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg);
  public:
   Track(ros::NodeHandle nh, ros::NodeHandle pnh);
