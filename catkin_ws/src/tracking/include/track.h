@@ -31,6 +31,8 @@
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
+// Sleep, just for debug
+#include <unistd.h>
 
 using namespace std;
 using namespace pcl;
@@ -39,11 +41,12 @@ using namespace ros;
 
 typedef PointCloud<PointXYZI> PointCloudXYZI;
 typedef PointCloud<PointXYZI>::Ptr PointCloudXYZIPtr;
+// Data Structure
 typedef vector<PointCloudXYZI> ClusterVector;
 typedef vector<Vector4f> CentroidVector;
 typedef tuple<ros::Time, CentroidVector, ClusterVector, PointCloudXYZIPtr> DataTuple;
 typedef vector<DataTuple> DataTupleVector;
-typedef tuple<ros::Time, int, Vector4f> ResultTuple;
+typedef tuple<ros::Time, int, Vector4f, PointCloudXYZI> ResultTuple;
 typedef vector<ResultTuple> ResultVector;
 typedef vector<ResultVector> ResultVectors;
 
@@ -52,6 +55,8 @@ class Track{
   // Variables
   bool status = false;
   bool firstProcess = true;
+  bool startReceive = false;
+  bool bagHasEnd = false;
   const int WIDTH = 1280, HEIGHT = 720;
   int frame_process_count;
   double leaf_size; // voxelgrid size, from parameter server
@@ -59,11 +64,12 @@ class Track{
   double centroidDistThres; // distance threshod between centroid
   double clusterTolerance;
   double lower_z;
-  ros::NodeHandle nh_, pnh_;
+  Time startReceiveTime;
+  NodeHandle nh_, pnh_;
   DataTupleVector TupleVector;
   ResultVectors RVector;
-  ros::Publisher result_pub, filtered_pub, cluster_pub;
-  ros::Subscriber lidar_sub;
+  Publisher result_pub, filtered_pub, cluster_pub;
+  Subscriber lidar_sub;
 
   visualization_msgs::MarkerArray markerArray;
   std::vector<pcl::PointIndices> cluster_indices;
@@ -79,6 +85,7 @@ class Track{
   Track(ros::NodeHandle nh, ros::NodeHandle pnh);
   bool getStatus(void) {return status;}
   void process_data(void);
+  void check_bag_has_end(void);
   void write_result(void);
   void plot_marker(void);
 };
