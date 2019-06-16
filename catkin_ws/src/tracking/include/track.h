@@ -1,12 +1,10 @@
 // C++
-#include <utility> // pair
-#include <cassert> // assert
+#include <thread>
 #include <algorithm> // find
 // ROS
 #include <ros/ros.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <cv_bridge/cv_bridge.h>
-#include <rviz_visual_tools/rviz_visual_tools.h>
 // MSG
 #include <sensor_msgs/PointCloud2.h>
 #include <visualization_msgs/Marker.h>
@@ -25,6 +23,7 @@
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h> // RANSAC segmentation
+#include <pcl/registration/icp.h>
 // OpenCV
 #include "opencv2/core/core.hpp"
 #include <opencv2/calib3d/calib3d.hpp>
@@ -33,26 +32,37 @@
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
 
-typedef std::vector<Eigen::Vector4f> vector_of_centroid;
-typedef std::vector<vector_of_centroid> vector_of_vectors;
+using namespace std;
+using namespace pcl;
+using namespace Eigen;
+using namespace ros;
+
+typedef PointCloud<PointXYZI> PointCloudXYZI;
+typedef PointCloud<PointXYZI>::Ptr PointCloudXYZIPtr;
+typedef vector<PointCloudXYZI> ClusterVector;
+typedef vector<Vector4f> CentroidVector;
+typedef tuple<ros::Time, CentroidVector, ClusterVector, PointCloudXYZIPtr> DataTuple;
+typedef vector<DataTuple> DataTupleVector;
+typedef tuple<ros::Time, int, Vector4f> ResultTuple;
+typedef vector<ResultTuple> ResultVector;
+typedef vector<ResultVector> ResultVectors;
 
 class Track{
  private:
   // Variables
-  const int WIDTH = 1280, HEIGHT = 720;
-  const distThres = 0.01;
-  int frame_process_count;
+  bool status = false;
   bool firstProcess = true;
+  const int WIDTH = 1280, HEIGHT = 720;
+  int frame_process_count;
   double leaf_size; // voxelgrid size, from parameter server
+  double clusterDistThres; // distance threshold from cluster to center
+  double centroidDistThres; // distance threshod between centroid
   double clusterTolerance;
   double lower_z;
   ros::NodeHandle nh_, pnh_;
-  //vector_of_vectors vovs;
-  vector_of_centroid v_current, v_last;
+  DataTupleVector TupleVector;
   ros::Publisher result_pub, filtered_pub, cluster_pub;
   ros::Subscriber lidar_sub;
-  // For visualizing things in rviz
-  rviz_visual_tools::RvizVisualToolsPtr rviz_tools_;
 
   visualization_msgs::MarkerArray markerArray;
   std::vector<pcl::PointIndices> cluster_indices;
@@ -63,11 +73,11 @@ class Track{
 
   pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
 
-  void initMatrix(void);
-  void pointCloudPreprocessing(void);
-  void comparison(void);
-  void plot_marker(void);
   void cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg);
  public:
   Track(ros::NodeHandle nh, ros::NodeHandle pnh);
+  bool getStatus(void) {return status;}
+  void process_data(void);
+  void write_result(void);
+  void plot_marker(void);
 };
