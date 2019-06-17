@@ -28,7 +28,13 @@ target_link_libraries(pcd_viewer_xyz ${PCL_LIBRARIES} xyz_viewer)
 add_executable(pcd_viewer_xyzrgb src/pcd_viewer.cpp)
 target_link_libraries(pcd_viewer_xyzrgb ${PCL_LIBRARIES} xyzrgb_viewer)
 
+add_executable(icp_point_to_plane src/icp_point_to_plane.cpp)
+target_link_libraries(icp_point_to_plane ${PCL_LIBRARIES})
+
+add_executable(find_corner src/find_corner.cpp)
+target_link_libraries(find_corner ${PCL_LIBRARIES})
 
 install(TARGETS pcd_viewer_xyz pcd_viewer_xyzrgb
+  PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE
   RUNTIME DESTINATION bin
 )

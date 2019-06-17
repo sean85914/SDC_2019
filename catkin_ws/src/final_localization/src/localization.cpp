@@ -46,6 +46,7 @@ typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloudXYZRGB;
 typedef pcl::PointCloud<pcl::PointXYZRGB>::Ptr PointCloudXYZRGBPtr;
 typedef std::tuple<std::vector<double>, PointCloudXYZ, ros::Time> MyTuple;
 typedef std::pair<Eigen::Matrix4f, ros::Time> transformationAndStamp;
+typedef std::pair<double, double> Coord;
 
 /*
    ____   _          _      ____    ____  
@@ -59,6 +60,7 @@ typedef std::pair<Eigen::Matrix4f, ros::Time> transformationAndStamp;
 class Localization{
  private:
   bool status; // Whether if finish, false if not and true if finish
+  bool getAngle; // Whether get first rotate angle
   bool use_icp; // Whether using icp, using ndt if false
   bool save_pcd; // If save pcd for each scan, from ROS parameter server
   bool removeGround; // If remove ground of scan
@@ -66,23 +68,26 @@ class Localization{
   bool passThrough; // If using passThrough filter to build local map pointcloud
   bool skip_mode; // If using skip mode, default is false, turn to true when low fitness error meet 
   int counter; // GPS frame counter
-  int rotate_time; // First scan rotate times, from ROS parameter server
   int skip_num; // Skip number, only used when skip_mode turns on, from ROS parameter server
   int skip_counter;
   const int MAX_ITER = 1000; // Maximum iteration for pointcloud registration
-  double last_x, last_y, last_z; // Last GPS reported position
+  double last_x, last_y; // Last GPS reported position
   double rough_x, rough_y, rough_z; // Rough GPS reported position
+  double first_yaw; // First rotate angle
+  double dx, dy;
   double radius; // Pointcloud search radius
   double length; // Length for passThrough to build local map
   double time_offset; // Time offset for rotating
+  double ndtResolution;
+  double ndtStepSize;
   const double VG_SIZE = 0.25f; // Voxelgrid leaf size
   const double FREQ = 0.5f; // Frequency fot publishing map pointcloud, 2 seconds
-  const double CONVERGE_SCORE = 0.2; // Score to consider as converged of registration (i.e., approch to ground truth)
+  const double CONVERGE_SCORE = 0.15f; // Score to consider as converged of registration (i.e., approch to ground truth)
   const double INIT_LAT = 24.7855644226f; // Initial latitude, from slide
   const double INIT_LON = 120.997009277f; // Initial longiture, from slide
   const double INIT_ALT = 127.651f; // Initial altitude, from slide
   std::string filename; // Write file name
-  const std::string package_path = ros::package::getPath("final");
+  const std::string package_path = ros::package::getPath("localization_13");
   const std::string FRAME = "map";
   const std::vector<std::string> pcd_name_vec = 
   {"first-0.pcd", "first-1.pcd", "first-2.pcd", "first-3.pcd", "first-4.pcd", "first-5.pcd",
@@ -92,6 +97,12 @@ class Localization{
    "submap_6.pcd", "submap_7.pcd", "submap_8.pcd", "submap_9.pcd", "submap_10.pcd", "submap_11.pcd",
    "submap_12.pcd", "submap_13.pcd", "submap_14.pcd", "submap_15.pcd","submap_16.pcd",
    "submap_17.pcd","submap_18.pcd","submap_19.pcd","submap_20.pcd"};
+  const std::vector<Coord> to_visit = 
+  {std::make_pair(0, 0), 
+   std::make_pair(1.0f, 1.0f), std::make_pair(2.0f, 2.0f), std::make_pair(3.0f, 3.0f),
+   std::make_pair(1.0f, -1.0f), std::make_pair(2.0f, -2.0f), std::make_pair(3.0f, -3.0f),
+   std::make_pair(-1.0f, 1.0f), std::make_pair(-2.0f, 2.0f), std::make_pair(-3.0f, 3.0f),
+   std::make_pair(-1.0f, -1.0f), std::make_pair(-2.0f, -2.0f), std::make_pair(-3.0f, -3.0f)};
   GeographicLib::Geocentric earth;
   GeographicLib::LocalCartesian proj;
   Eigen::Matrix4f guess; // Initial guess placeholder
@@ -158,15 +169,16 @@ int main(int argc, char** argv)
 
 Localization::Localization(ros::NodeHandle nh, ros::NodeHandle pnh): 
   nh_(nh), pnh_(pnh), counter(0), status(false), removeGround(true), 
-  removeOutlier(false), passThrough(true), skip_mode(false), skip_counter(0),
+  removeOutlier(false), passThrough(true), skip_mode(false), getAngle(false), skip_counter(0),
   earth(GeographicLib::Constants::WGS84_a(), GeographicLib::Constants::WGS84_f()),
   proj(INIT_LAT, INIT_LON, INIT_ALT, earth)
 {
   // Get parameters
   if(!pnh_.getParam("skip_num", skip_num)) skip_num = 0; ROS_INFO("skip_num: %d", skip_num);
-  if(!pnh_.getParam("rotate_time", rotate_time)) rotate_time = 16; ROS_INFO("rotate_time: %d", rotate_time);
   if(!pnh_.getParam("radius", radius)) radius = 30.0f; ROS_INFO("radius: %f", radius);
   if(!pnh_.getParam("length", length)) length = 100.0f; ROS_INFO("length: %f", length);
+  if(!pnh_.getParam("ndtResolution", ndtResolution)) ndtResolution = 1.0f; ROS_INFO("ndtResolution: %f", ndtResolution);
+  if(!pnh_.getParam("ndtStepSize", ndtStepSize)) ndtStepSize = 6.0f; ROS_INFO("ndtStepSize: %f", ndtStepSize);
   if(!pnh_.getParam("use_icp", use_icp)) use_icp = true; ROS_INFO("use_icp: %s", (use_icp?"true":"false"));
   if(!pnh_.getParam("save_pcd", save_pcd)) save_pcd = false; ROS_INFO("save_pcd: %s", (save_pcd?"true":"false"));
   if(!pnh_.getParam("filename", filename)) filename = "data"; ROS_INFO("filename: %s", filename.c_str());
@@ -184,10 +196,10 @@ Localization::Localization(ros::NodeHandle nh, ros::NodeHandle pnh):
     icp.setEuclideanFitnessEpsilon(1e-9);
   } else{
     ndt.setMaximumIterations(MAX_ITER);
-    ndt.setTransformationEpsilon(1e-5);
-    ndt.setEuclideanFitnessEpsilon(1e-5);
-    ndt.setStepSize(3.0f); // XXX what is this parameter means?
-    ndt.setResolution(1.0f); // XXX what is this parameter means?
+    ndt.setTransformationEpsilon(1e-3);
+    ndt.setEuclideanFitnessEpsilon(1e-3);
+    ndt.setStepSize(ndtStepSize); // XXX what is this parameter means?
+    ndt.setResolution(ndtResolution); // XXX what is this parameter means?
   }
   map_pcPtr = PointCloudXYZPtr (new PointCloudXYZ);
   PointCloudXYZPtr tempPtr (new PointCloudXYZ);
@@ -235,15 +247,46 @@ void Localization::publishMapPC(void){
   }
 }
 
+/*
+  
+   ____      _      _       _       ____       _       ____   _  __     ____   ____    ____  
+  / ___|    / \    | |     | |     | __ )     / \     / ___| | |/ /    / ___| |  _ \  / ___| 
+ | |       / _ \   | |     | |     |  _ \    / _ \   | |     | ' /    | |  _  | |_) | \___ \ 
+ | |___   / ___ \  | |___  | |___  | |_) |  / ___ \  | |___  | . \    | |_| | |  __/   ___) |
+  \____| /_/   \_\ |_____| |_____| |____/  /_/   \_\  \____| |_|\_\    \____| |_|     |____/ 
+                                                                                             
+
+ */
+
 void Localization::callback_gps(const sensor_msgs::NavSatFixConstPtr &gpsPtr){
   proj.Forward(gpsPtr->latitude, gpsPtr->longitude, gpsPtr->altitude, rough_x, rough_y, rough_z);
   geometry_msgs::Point p;
   p.x = rough_x; p.y = rough_y; p.z = rough_z;
   marker_raw.points.push_back(p);
-  if(counter==0) ROS_INFO("First GPS data| X: %f| Y: %f| Z:%f", rough_x, rough_y, rough_z);
+  if(counter==0) {
+    ROS_INFO("First GPS data| X: %f| Y: %f| Z: %f", rough_x, rough_y, rough_z);
+    dx += rough_x; dy += rough_y;
+  }
+  if(counter==2) { // Compare first and third GPS data and form the rotating angle
+    ROS_INFO("Third GPS data| X: %f| Y: %f| Z: %f", rough_x, rough_y, rough_z);
+    dx = rough_x - dx; dy = rough_y - dy;
+    first_yaw = atan2(dy, dx) - deg2rad(120.0f); ROS_INFO("Predicted first_yaw: %f (rad) [%f (deg)]", first_yaw, rad2deg(first_yaw));
+    getAngle = true;
+  }
   ++counter;
   pub_raw.publish(marker_raw);
 }
+
+/*
+
+   ____      _      _       _       ____       _       ____   _  __    ____     ____ 
+  / ___|    / \    | |     | |     | __ )     / \     / ___| | |/ /   |  _ \   / ___|
+ | |       / _ \   | |     | |     |  _ \    / _ \   | |     | ' /    | |_) | | |    
+ | |___   / ___ \  | |___  | |___  | |_) |  / ___ \  | |___  | . \    |  __/  | |___ 
+  \____| /_/   \_\ |_____| |_____| |____/  /_/   \_\  \____| |_|\_\   |_|      \____|
+                                                                                     
+
+ */
 
 void Localization::callback_pc(const sensor_msgs::PointCloud2ConstPtr &pcPtr){
   if(counter==0) return; // No GPS data receive yet
@@ -318,6 +361,17 @@ void Localization::publishData(PointCloudXYZ icp_result, ros::Time stamp, Eigen:
   pub_localization.publish(marker_localization);
 }
 
+/*
+  
+  ____    ____     ___     ____   _____   ____    ____      ____       _      _____      _    
+ |  _ \  |  _ \   / _ \   / ___| | ____| / ___|  / ___|    |  _ \     / \    |_   _|    / \   
+ | |_) | | |_) | | | | | | |     |  _|   \___ \  \___ \    | | | |   / _ \     | |     / _ \  
+ |  __/  |  _ <  | |_| | | |___  | |___   ___) |  ___) |   | |_| |  / ___ \    | |    / ___ \ 
+ |_|     |_| \_\  \___/   \____| |_____| |____/  |____/    |____/  /_/   \_\   |_|   /_/   \_\
+                                                                                              
+
+ */
+
 void Localization::processData(void){
   static int thread_count = 0;
   std::vector<double> last_gps; last_gps.resize(3);
@@ -362,36 +416,47 @@ void Localization::processData(void){
       use_icp?(icp.setInputTarget(sub_map.makeShared())):(ndt.setInputTarget(sub_map.makeShared()));
     } else use_icp?(icp.setInputTarget(map_pcPtr)):(ndt.setInputTarget(map_pcPtr)); // Whole map
     if(thread_count==0){ // First scan, which is most important
-      // Rotate \rotate_time\ times to get best initial guess (including position and orientation)
-      std::vector<double> registration_score; registration_score.resize(rotate_time); // Output score placeholder
-      std::vector<Eigen::Matrix4f> registration_res; registration_res.resize(rotate_time); // Output transform placeholder
-      Eigen::Matrix4f temp = Eigen::Matrix4f::Identity();
-      temp(0, 3) = position[0]; temp(1, 3) = position[1]; // GPS position X and Y
+      if(!getAngle) continue;
+      double min_score = 1e6; Eigen::Matrix4f best_tf;
       last_x = position[0]; last_y = position[1]; // Put into last data placeholder
-      ROS_INFO("Try rotating scan to find best initial guess...");
-      for(int i=0; i<rotate_time; ++i){
-        double theta = i*(2*M_PI)/rotate_time;
-        // Rotate Z-axis
-        temp(0, 0) = cos(theta); temp(0, 1) = -sin(theta);
-        temp(1, 0) = sin(theta); temp(1, 1) = cos(theta);
+      guess(0, 0) = cos(first_yaw); guess(0, 1) = -sin(first_yaw); guess(0, 3) = position[0];
+      guess(1, 0) = sin(first_yaw); guess(1, 1) = cos(first_yaw); guess(1, 3) = position[1];
+      for(size_t i=0; i<to_visit.size(); ++i){
+        guess(0, 3) += to_visit[i].first; guess(1, 3) += to_visit[i].second;
         if(use_icp){
           icp.setInputSource(scan.makeShared());
-          icp.align(*result, temp);
-          registration_score[i] = icp.getFitnessScore(); registration_res[i] = icp.getFinalTransformation();
+          icp.align(*result, guess);
+          if(icp.getFitnessScore()<min_score){
+            min_score = icp.getFitnessScore();
+            best_tf = icp.getFinalTransformation();
+          } if(icp.getFitnessScore() < CONVERGE_SCORE){
+            best_tf = icp.getFinalTransformation(); 
+            ROS_INFO("[%d/%d]| (%f, %f) min_score: %f|", (int)i+1, (int)to_visit.size(), to_visit[i].first, to_visit[i].second, min_score);
+            if(skip_num!=0) {
+              skip_mode = true;
+              ROS_INFO("\033[1;33mClose to ground truth, turn on skip mode to speed up processing...\033[0m");
+            } // End if (skip_num!=0)
+            break;
+          } // End if (icp.getFitnessScore() < CONVERGE_SCORE)
         } else{
           ndt.setInputSource(scan.makeShared());
-          ndt.align(*result, temp);
-          registration_score[i] = ndt.getFitnessScore(); registration_res[i] = ndt.getFinalTransformation();
+          ndt.align(*result, guess);
+          if(ndt.getFitnessScore()<min_score){
+            min_score = ndt.getFitnessScore();
+            best_tf = ndt.getFinalTransformation();
+          } if(ndt.getFitnessScore() < CONVERGE_SCORE){
+            best_tf = ndt.getFinalTransformation(); 
+            ROS_INFO("[%d/%d]| (%f, %f) min_score: %f|", (int)i+1, (int)to_visit.size(), to_visit[i].first, to_visit[i].second, min_score);
+            if(skip_num!=0) {
+              skip_mode = true;
+              ROS_INFO("\033[1;33mClose to ground truth, turn on skip mode to speed up processing...\033[0m");
+            } // End if (skip_num!=0)
+            break;
+          } // End if (icp.getFitnessScore() < CONVERGE_SCORE)
         } // End if-else
-        ROS_INFO("|[%2d/%d]| theta: %4.f |score: %f|", i+1, rotate_time, rad2deg(theta), registration_score[i]);
+        ROS_INFO("[%d/%d]| (%f, %f) min_score: %f|", (int)i+1, (int)to_visit.size(), to_visit[i].first, to_visit[i].second, min_score);
       } // End for
-      int min_index; // Find minimum in vector
-      std::vector<double>::iterator min_it = std::min_element(registration_score.begin(), registration_score.end());
-      min_index = std::distance(registration_score.begin(), min_it);
-      ROS_INFO("Min score for registration: %f -> %.f (deg)", registration_score[min_index], rad2deg(min_index*(2*M_PI)/rotate_time));
-      guess = registration_res[min_index]; // Put best transformation into guess for iteration
-      pcl::transformPointCloud(scan, *result, guess);
-      score = registration_score[min_index];
+      guess = best_tf; pcl::copyPointCloud(scan, *result); pcl::transformPointCloud(*result, *result, guess);
       publishData(*result, corresponding_stamp, guess);
       position.clear(); scan.clear();
       myVector.erase(myVector.begin()); ++thread_count; // Erase first element and advence to next one
@@ -403,21 +468,22 @@ void Localization::processData(void){
     } // End if(thread_count==0) 
     ros::Time registrationTimer = ros::Time::now();
     // Roughly guess toward the vector provided by GPS
-    if(position.size()==3){ // Weird but may occur that size is 0
+    /*if(position.size()==3){ // Weird but may occur that size is 0
       guess(0, 3) += position[0] - last_x; last_x = position[0]; 
       guess(1, 3) += position[1] - last_y; last_y = position[1];
-    }
+    }*/
+    if(thread_count!=1) guess(0, 3) += dx; guess(1, 3) += dy; 
     if(use_icp){
-      icp.setInputSource(scan.makeShared());
+      icp.setInputSource(scan.makeShared()); dx = guess(0, 3); dy = guess(1, 3);
       icp.align(*result, guess);
       score = icp.getFitnessScore();
-      guess = icp.getFinalTransformation();
+      guess = icp.getFinalTransformation(); dx = guess(0, 3) - dx; dy = guess(1, 3) - dy;
     } else{
-      ndt.setInputSource(scan.makeShared());
+      ndt.setInputSource(scan.makeShared()); dx = guess(0, 3); dy = guess(1, 3);
       ndt.align(*result, guess);
       score = ndt.getFitnessScore();
-      guess = ndt.getFinalTransformation();
-    }  ROS_INFO("%s takes time [%f] seconds", (use_icp?"ICP":"NDT"), (ros::Time::now()-registrationTimer).toSec());
+      guess = ndt.getFinalTransformation(); dx = guess(0, 3) - dx; dy = guess(1, 3) - dy;
+    }  ROS_INFO("%s takes time [\033[1;33m%f\033[0m] seconds", (use_icp?"ICP":"NDT"), (ros::Time::now()-registrationTimer).toSec());
     if(score<CONVERGE_SCORE and skip_mode==false){
       // Loose the converge criteria
       if(use_icp){

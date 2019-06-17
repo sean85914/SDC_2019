@@ -1,4 +1,5 @@
-
+import os
+import sys
 import csv
 from decimal import *
 from argparse import ArgumentParser
@@ -9,6 +10,8 @@ parser.add_argument("--bag_num", help="number of bag", type=int, default=1)
 parser.add_argument("--file_name", help="name of result csv file", type=str)
 args = parser.parse_args()
 
+file_path = os.getcwd() + "/" + os.path.dirname(__file__)
+
 def main():
 
 	global counter
@@ -16,9 +19,9 @@ def main():
 	# Ground Truth and Measurement Path
 	file_gt = None
 	if args.bag_num == 1:
-		file_gt = '/home/sean/Downloads/SDC/catkin_ws/src/final/localization_ground_truth/localization_ground_truth_1.csv'
+		file_gt = file_path + '/localization_ground_truth_1.csv'
 	elif args.bag_num == 2:
-		file_gt = '/home/sean/Downloads/SDC/catkin_ws/src/final/localization_ground_truth/localization_ground_truth_2.csv'
+		file_gt = file_path + '/localization_ground_truth_2.csv'
 	#file_meas = '/home/sean/Downloads/SDC/catkin_ws/src/final/data.csv'
 	file_meas = args.file_name
 	

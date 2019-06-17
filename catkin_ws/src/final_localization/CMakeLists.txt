@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(final_localization)
+project(localization_13)
 add_compile_options(-std=c++14)
 
 find_package(catkin REQUIRED COMPONENTS
@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 #find_package(Boost REQUIRED)
 find_package(GeographicLib REQUIRED)
+set(CMAKE_BUILD_TYPE Release)
 
 catkin_package(
 )
