@@ -12,6 +12,10 @@ Track::Track(ros::NodeHandle nh, ros::NodeHandle pnh): nh_(nh), pnh_(pnh){
   cluster_pub = pnh_.advertise<sensor_msgs::PointCloud2>("cluster", 1);
   bb_pub = pnh_.advertise<visualization_msgs::MarkerArray>("box", 1);
   id_pub = pnh_.advertise<visualization_msgs::MarkerArray>("id", 1);
+
+  bicp_pub = pnh_.advertise<sensor_msgs::PointCloud2>("before_icp", 1);
+  aicp_pub = pnh_.advertise<sensor_msgs::PointCloud2>("after_icp", 1);
+
   // ICP converge criteria
   icp.setMaximumIterations(100);
   icp.setTransformationEpsilon(1e-3);
@@ -21,8 +25,8 @@ Track::Track(ros::NodeHandle nh, ros::NodeHandle pnh): nh_(nh), pnh_(pnh){
   if(!pnh_.getParam("leaf_size", leaf_size)) leaf_size = 0.1f; ROS_INFO("leaf_size: %f", leaf_size);
   if(!pnh_.getParam("clusterDistThres", clusterDistThres)) clusterDistThres = 30.0f; ROS_INFO("clusterDistThres: %f", clusterDistThres);
   if(!pnh_.getParam("centroidDistThres", centroidDistThres)) centroidDistThres = 1.0f; ROS_INFO("centroidDistThres: %f", centroidDistThres);
-  if(!pnh_.getParam("filename", filename)) filename="result"; ROS_INFO("filename: %s", filename);
-  clusterTolerance = 0.5f;
+  if(!pnh_.getParam("filename", filename)) filename="result"; ROS_INFO("filename: %s", filename.c_str());
+  clusterTolerance = 0.4f;
   writeFile.setFileName(package_path + "/" + filename + ".csv");
   ROS_INFO("[%s] Node ready!", ros::this_node::getName().c_str());
 }
@@ -44,6 +48,10 @@ void Track::process_data(void){
   ros::Time total_time = ros::Time::now();
   Matrix4f tf = Matrix4f::Identity(4, 4);
   while(ros::ok()){
+    if(TupleVector.size() == 0){
+      ROS_INFO("Process too fast!!");
+      continue;
+    }
     DataTuple tuple_source = TupleVector.front();
     Time time_source = get<0>(tuple_source);
     CentroidVector centV_source = get<1>(tuple_source);
@@ -75,12 +83,30 @@ void Track::process_data(void){
       icp.setInputTarget(cloud_target.makeShared());
       icp.align(final_cloud, tf);
       tf = icp.getFinalTransformation();
-      cout << "ICP spent time: " << ros::Time::now() - icp_t << endl;
+      //cout << "ICP spent time: " << ros::Time::now() - icp_t << endl;
+
+      // plot pointcloud before and after icp
+      PointCloud<PointXYZRGB> b_cloud, a_cloud;
+      copyPointCloud(cloud_target, b_cloud);
+      copyPointCloud(final_cloud, a_cloud);
+      for(auto &p : b_cloud.points) p.r = 255;
+      for(auto &p : a_cloud.points) p.b = 255;
+      sensor_msgs::PointCloud2 b_cloud_msg, a_cloud_msg;
+      toROSMsg(a_cloud, a_cloud_msg);
+      toROSMsg(b_cloud, b_cloud_msg);
+      bicp_pub.publish(b_cloud_msg);
+      aicp_pub.publish(a_cloud_msg);
+
       // Find centroid pair 
       int no_match_count = 0;
       ros::Time t = ros::Time::now();
       for(int target_count=0; target_count < centV_target.size(); ++target_count){
-        ResultVector v_last = RVector.back();
+        ResultVector v_last;
+        if(RVector.size() == 0){
+          ROS_INFO("RVector got zero size!!");
+          continue;
+        }
+        v_last = RVector.back();
         int idMax = get<1>(v_last.at(v_last.size() - 1));
         bool match = false;
         Vector4f ct = centV_target.at(target_count);
@@ -103,7 +129,7 @@ void Track::process_data(void){
         }
       }
       RVector.push_back(rv);
-      ROS_INFO("%d clusters are matched!, %d cluster aren't matched", (int)rv.size() - no_match_count, no_match_count);
+      //ROS_INFO("%d clusters are matched!, %d cluster aren't matched", (int)rv.size() - no_match_count, no_match_count);
       // Remove the first element
       TupleVector.erase(TupleVector.begin());
     }
@@ -148,8 +174,7 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
   extract.setIndices(inliers);
   PointCloudXYZIPtr cloud_remove_inliers(new PointCloudXYZI);
   extract.setNegative(true);
-  extract.filter(*cloud_remove_inliers); 
-  *cloud_filtered = *cloud_remove_inliers;
+  extract.filter(*cloud_filtered); 
   // Calculate the value of mean and sd of intensity of cloud_filtered
   double mean = 0, x_square = 0;
   size_t points_num = cloud_filtered->size();
@@ -178,8 +203,8 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
   // Euclidean cluster
   EuclideanClusterExtraction<PointXYZI> ec;
   ec.setClusterTolerance(clusterTolerance); // 
-  ec.setMinClusterSize(10);
-  ec.setMaxClusterSize(1500);
+  ec.setMinClusterSize(5);
+  ec.setMaxClusterSize(1000);
   ec.setSearchMethod(tree);
   ec.setInputCloud(cloud_filtered);
   ec.extract(cluster_indices);
@@ -196,7 +221,7 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
     Vector4f centroid;
     compute3DCentroid(*cloud_cluster, centroid);
     double dist = sqrt(pow(centroid(0), 2) + pow(centroid(1), 2) + pow(centroid(2), 2));
-    if(dist > clusterDistThres or dist < 2 or centroid(2) > 0.2) continue; // Too far away, neglect
+    if(dist > clusterDistThres or dist < 0.5 or centroid(2) > 0.1) continue; // Too far away, neglect
     clus_vec.push_back(*cloud_cluster);
     cent_vec.push_back(centroid);
     *cloud_clusters += *cloud_cluster; // add cluster cloud
@@ -205,7 +230,7 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
   TupleVector.push_back(tuple);
 
   Time time_end = Time::now();
-  cout << "PointCloud Filtering Process Time " << time_end-time_start << endl;
+  //cout << "PointCloud Filtering Process Time " << time_end-time_start << endl;
 }
 
 void Track::plotResult(ResultVector rv){
@@ -220,6 +245,8 @@ void Track::plotResult(ResultVector rv){
     clusterCloud += pc;
     PointXYZI minPoint, maxPoint;
     getMinMax3D(pc, minPoint, maxPoint);
+    if((maxPoint.z - minPoint.z) > 1.5) continue; // Filter out trees
+    if((maxPoint.z - minPoint.z) < 0.3) continue; // Filter out don't know what
     visualization_msgs::Marker bbMarker, idMarker;
     bbMarker.header.frame_id = "velodyne";
     bbMarker.ns = "box_" + std::to_string((int)i);

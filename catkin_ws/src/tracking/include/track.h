@@ -82,7 +82,7 @@ class Track{
   NodeHandle nh_, pnh_;
   DataTupleVector TupleVector;
   ResultVectors RVector;
-  Publisher cluster_pub, bb_pub, id_pub;
+  Publisher cluster_pub, bb_pub, id_pub, bicp_pub, aicp_pub;
   Subscriber lidar_sub;
 
   visualization_msgs::MarkerArray markerArray;

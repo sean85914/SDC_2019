@@ -4,13 +4,17 @@
   <arg name="cluster_dist_thres" default="15" doc="distance threshold for cluster" />
   <arg name="centroid_dist_thres" default="1" doc="distance threshold for centroid" />
   <arg name="file_name" doc="The name of csv file" />
+  <arg name="debug" default="false" />
+  <arg name="debugString" value="xterm -e gdb -ex run --args" if="$(arg debug)" />
+  <arg name="debugString" value="" unless="$(arg debug)"/> 
+
   <!--param name="use_sim_time" value="true" /-->
 
   <!-- remove the comment command below if you want to use debug tool -->
-  <node pkg="tracking" type="tracking_node" name="tracking_node" output="screen" clear_params="true" required="true" launch-prefix="xterm -e gdb -ex run --args "> 
+  <node pkg="tracking" type="tracking_node" name="tracking_node" output="screen" clear_params="true" required="true" launch-prefix="$(arg debugString) "> 
     <param name="leaf_size" value="$(arg size)" />
-    <param name="clusterDistThres" value="$(arg cluster_dist_thres" />
-    <param name="centroidDistThres" value="$(arg centroid_dist_thres" />
+    <param name="clusterDistThres" value="$(arg cluster_dist_thres)" />
+    <param name="centroidDistThres" value="$(arg centroid_dist_thres)" />
     <param name="filename" value="$(arg file_name)" />
   </node>
   <!--node pkg="rosbag" type="play" name="play" args="$(find tracking)/bag/tracking_1.bag -l -r 0.1 -/-clock" output="screen"/-->
