@@ -75,6 +75,7 @@ class Localization{
   double rough_x, rough_y, rough_z; // Rough GPS reported position
   double first_yaw; // First rotate angle
   double dx, dy;
+  double min_dis;
   double radius; // Pointcloud search radius
   double length; // Length for passThrough to build local map
   double time_offset; // Time offset for rotating
@@ -112,10 +113,11 @@ class Localization{
   ros::Subscriber sub_pc;
   ros::Subscriber sub_gps;
   // Publishers
-  ros::Publisher pub_map_pc;
-  ros::Publisher pub_local_scan;
-  ros::Publisher pub_raw;
-  ros::Publisher pub_localization;
+  ros::Publisher pub_map_pc; // Map publisher
+  ros::Publisher pub_local_scan; // Local scan (filtered) publisher
+  ros::Publisher pub_raw; // Raw GPS data publisher
+  ros::Publisher pub_localization; // Localization marker publisher
+  ros::Publisher pub_removal; // Removed plane pointcloud publisher
   visualization_msgs::Marker marker_raw, marker_localization;
   PointCloudXYZPtr map_pcPtr;
   pcl::VoxelGrid<pcl::PointXYZ> vg; // Voxel grid downsampling
@@ -174,15 +176,17 @@ Localization::Localization(ros::NodeHandle nh, ros::NodeHandle pnh):
   proj(INIT_LAT, INIT_LON, INIT_ALT, earth)
 {
   // Get parameters
+  ROS_INFO("***********************************************************************");
   if(!pnh_.getParam("skip_num", skip_num)) skip_num = 0; ROS_INFO("skip_num: %d", skip_num);
   if(!pnh_.getParam("radius", radius)) radius = 30.0f; ROS_INFO("radius: %f", radius);
   if(!pnh_.getParam("length", length)) length = 100.0f; ROS_INFO("length: %f", length);
   if(!pnh_.getParam("ndtResolution", ndtResolution)) ndtResolution = 1.0f; ROS_INFO("ndtResolution: %f", ndtResolution);
   if(!pnh_.getParam("ndtStepSize", ndtStepSize)) ndtStepSize = 6.0f; ROS_INFO("ndtStepSize: %f", ndtStepSize);
   if(!pnh_.getParam("use_icp", use_icp)) use_icp = true; ROS_INFO("use_icp: %s", (use_icp?"true":"false"));
+  if(!use_icp){if(!pnh_.getParam("min_dis", min_dis)) min_dis = 20.0f; ROS_INFO("min_dis: %f", min_dis);}
   if(!pnh_.getParam("save_pcd", save_pcd)) save_pcd = false; ROS_INFO("save_pcd: %s", (save_pcd?"true":"false"));
   if(!pnh_.getParam("filename", filename)) filename = "data"; ROS_INFO("filename: %s", filename.c_str());
-  
+  ROS_INFO("***********************************************************************");
   writeFile.setFileName(package_path+"/"+ filename +".csv");
   if(save_pcd){ // Save pcd for further usage
     boost::filesystem::path direct(package_path+"/"+"scan");
@@ -200,6 +204,10 @@ Localization::Localization(ros::NodeHandle nh, ros::NodeHandle pnh):
     ndt.setEuclideanFitnessEpsilon(1e-3);
     ndt.setStepSize(ndtStepSize); // XXX what is this parameter means?
     ndt.setResolution(ndtResolution); // XXX what is this parameter means?
+    // Use ICP to fit first scan
+    icp.setMaximumIterations(MAX_ITER);
+    icp.setTransformationEpsilon(1e-9);
+    icp.setEuclideanFitnessEpsilon(1e-9);
   }
   map_pcPtr = PointCloudXYZPtr (new PointCloudXYZ);
   PointCloudXYZPtr tempPtr (new PointCloudXYZ);
@@ -216,6 +224,7 @@ Localization::Localization(ros::NodeHandle nh, ros::NodeHandle pnh):
   sub_gps = nh_.subscribe("fix", 1, &Localization::callback_gps, this);
   pub_map_pc = pnh_.advertise<sensor_msgs::PointCloud2>("map_pc", 1);
   pub_local_scan = pnh_.advertise<sensor_msgs::PointCloud2>("local_scan", 1);
+  if(!use_icp) pub_removal = pnh_.advertise<sensor_msgs::PointCloud2>("removal", 1);
   pub_raw = pnh_.advertise<visualization_msgs::Marker>("raw_data", 1);
   pub_localization = pnh_.advertise<visualization_msgs::Marker>("localization", 1);
   // Marker initialization
@@ -415,7 +424,8 @@ void Localization::processData(void){
       pass.setFilterLimits(lower_y, upper_y);
       use_icp?(icp.setInputTarget(sub_map.makeShared())):(ndt.setInputTarget(sub_map.makeShared()));
     } else use_icp?(icp.setInputTarget(map_pcPtr)):(ndt.setInputTarget(map_pcPtr)); // Whole map
-    if(thread_count==0){ // First scan, which is most important
+    // First scan, which is most important
+    if(thread_count==0){ 
       if(!getAngle) continue;
       double min_score = 1e6; Eigen::Matrix4f best_tf;
       last_x = position[0]; last_y = position[1]; // Put into last data placeholder
@@ -423,7 +433,8 @@ void Localization::processData(void){
       guess(1, 0) = sin(first_yaw); guess(1, 1) = cos(first_yaw); guess(1, 3) = position[1];
       for(size_t i=0; i<to_visit.size(); ++i){
         guess(0, 3) += to_visit[i].first; guess(1, 3) += to_visit[i].second;
-        if(use_icp){
+        if(use_icp or !use_icp){
+          if(!use_icp) icp.setInputTarget(ndt.getInputTarget());
           icp.setInputSource(scan.makeShared());
           icp.align(*result, guess);
           if(icp.getFitnessScore()<min_score){
@@ -431,30 +442,15 @@ void Localization::processData(void){
             best_tf = icp.getFinalTransformation();
           } if(icp.getFitnessScore() < CONVERGE_SCORE){
             best_tf = icp.getFinalTransformation(); 
-            ROS_INFO("[%d/%d]| (%f, %f) min_score: %f|", (int)i+1, (int)to_visit.size(), to_visit[i].first, to_visit[i].second, min_score);
+            ROS_INFO("|[%d/%d]| (%f, %f)| min_score: %f|", (int)i+1, (int)to_visit.size(), to_visit[i].first, to_visit[i].second, min_score);
             if(skip_num!=0) {
               skip_mode = true;
               ROS_INFO("\033[1;33mClose to ground truth, turn on skip mode to speed up processing...\033[0m");
             } // End if (skip_num!=0)
             break;
           } // End if (icp.getFitnessScore() < CONVERGE_SCORE)
-        } else{
-          ndt.setInputSource(scan.makeShared());
-          ndt.align(*result, guess);
-          if(ndt.getFitnessScore()<min_score){
-            min_score = ndt.getFitnessScore();
-            best_tf = ndt.getFinalTransformation();
-          } if(ndt.getFitnessScore() < CONVERGE_SCORE){
-            best_tf = ndt.getFinalTransformation(); 
-            ROS_INFO("[%d/%d]| (%f, %f) min_score: %f|", (int)i+1, (int)to_visit.size(), to_visit[i].first, to_visit[i].second, min_score);
-            if(skip_num!=0) {
-              skip_mode = true;
-              ROS_INFO("\033[1;33mClose to ground truth, turn on skip mode to speed up processing...\033[0m");
-            } // End if (skip_num!=0)
-            break;
-          } // End if (icp.getFitnessScore() < CONVERGE_SCORE)
-        } // End if-else
-        ROS_INFO("[%d/%d]| (%f, %f) min_score: %f|", (int)i+1, (int)to_visit.size(), to_visit[i].first, to_visit[i].second, min_score);
+        } // End if
+        ROS_INFO("|[%d/%d]| (%f, %f)| min_score: %f|", (int)i+1, (int)to_visit.size(), to_visit[i].first, to_visit[i].second, min_score);
       } // End for
       guess = best_tf; pcl::copyPointCloud(scan, *result); pcl::transformPointCloud(*result, *result, guess);
       publishData(*result, corresponding_stamp, guess);
@@ -467,6 +463,38 @@ void Localization::processData(void){
       continue;
     } // End if(thread_count==0) 
     ros::Time registrationTimer = ros::Time::now();
+    // NDT temps to wrongly match the bus around the Jhongjheng Hall
+    // Observation: The bus has a huge plane
+    PointCloudXYZRGB plot_removal;
+    if(!use_icp and min_dis>0){
+      pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
+      pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
+      // Create the segmentation object
+      pcl::SACSegmentation<pcl::PointXYZ> seg_plane;
+      // Optional
+      seg_plane.setOptimizeCoefficients(true);
+      // Mandatory
+      seg_plane.setModelType(pcl::SACMODEL_PLANE);
+      seg_plane.setMethodType(pcl::SAC_RANSAC);
+      seg_plane.setDistanceThreshold(0.10f);
+      seg_plane.setInputCloud(scan.makeShared());
+      seg_plane.segment(*inliers, *coefficients);
+      PointCloudXYZ temp;
+      for(size_t p_index=0; p_index<scan.points.size(); ++p_index){
+        auto it = std::find(inliers->indices.begin(), inliers->indices.end(), p_index); // Find whether p_index in inlier
+        if(it==inliers->indices.end()) temp.points.push_back(scan.points[p_index]); // Not found, then put into temp pointcloud
+        else{
+          double px = scan.points[p_index].x, py = scan.points[p_index].y, pz = scan.points[p_index].z;
+          if(px*px+py*py+pz*pz<=min_dis*min_dis){ // Inlier point distance less then threshold, then remove it from scan and put into plotting pointcloud
+            pcl::PointXYZRGB p; p.x = px, p.y = py, p.z = pz, p.g = p.b = 255; plot_removal.points.push_back(p); // Cyan blue
+          } else temp.points.push_back(scan.points[p_index]);
+        } // End if-else
+      } // End for
+      temp.height = 1; temp.width = temp.points.size(); plot_removal.height = 1; plot_removal.width = plot_removal.points.size();
+      // Copy temp to scan
+      pcl::copyPointCloud(temp, scan);
+    }
+    /* Motion Model */
     // Roughly guess toward the vector provided by GPS
     /*if(position.size()==3){ // Weird but may occur that size is 0
       guess(0, 3) += position[0] - last_x; last_x = position[0]; 
@@ -498,6 +526,12 @@ void Localization::processData(void){
       }
     }
     publishData(*result, corresponding_stamp, guess);
+    if(!use_icp){
+      // Publish removed points
+      pcl::transformPointCloud(plot_removal, plot_removal, guess);
+      sensor_msgs::PointCloud2 pcout;
+      pcl::toROSMsg(plot_removal, pcout); pcout.header.frame_id = FRAME; pub_removal.publish(pcout);
+    }
     double until_now = (ros::Time::now()-total_time).toSec() - time_offset;
     position.clear(); scan.clear(); myVector.erase(myVector.begin()); ++thread_count; // Erase first element and advance to next one
     ROS_INFO("Pop one item, totally %d items popped, %d remain! [After processing: %f seconds] [%f per frame]", 
