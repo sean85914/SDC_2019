@@ -66,6 +66,7 @@ class Track{
   bool bagHasEnd = false;
   const int WIDTH = 1280, HEIGHT = 720;
   int frame_process_count;
+  int bag_num;
   double leaf_size; // voxelgrid size, from parameter server
   double clusterDistThres; // distance threshold from cluster to center
   double centroidDistThres; // distance threshod between centroid

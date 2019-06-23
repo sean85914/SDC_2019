@@ -27,7 +27,9 @@ Track::Track(ros::NodeHandle nh, ros::NodeHandle pnh): nh_(nh), pnh_(pnh){
   if(!pnh_.getParam("centroidDistThres", centroidDistThres)) centroidDistThres = 1.0f; ROS_INFO("centroidDistThres: %f", centroidDistThres);
   if(!pnh_.getParam("filename", filename)) filename="result"; ROS_INFO("filename: %s", filename.c_str());
   if(!pnh_.getParam("IoSThres", IoSThres)) IoSThres=0.5f; ROS_INFO("IoSThres: %f", IoSThres);
-  clusterTolerance = 0.4f;
+  if(!pnh_.getParam("bag_num", bag_num)) ROS_INFO("bag_num: %d", bag_num);
+  if(bag_num == 1) clusterTolerance = 0.4f;
+  else clusterTolerance = 0.5f;
   writeFile.setFileName(package_path + "/" + filename + ".csv");
   ROS_INFO("[%s] Node ready!", ros::this_node::getName().c_str());
 }
@@ -265,8 +267,7 @@ double Track::calculate_intersection_ratio(const PointCloudXYZI cloud_source, co
   double z_min = max(min_xyz(2), minPoint_target.z);
   double z_max = min(max_xyz(2), maxPoint_target.z);
   if(x_max < x_min or y_max < y_min or z_max < z_min) return 0;
-  //ROS_INFO("x_min: %f, x_max: %f, y_min: %f, y_max: %f, z_min: %f, z_max: %f",min_xyz(0), max_xyz(0), min_xyz(1), max_xyz(1), min_xyz(2), max_xyz(2));
-  //ROS_INFO("tf_x_min: %f, tf_x_max: %f, tf_y_min: %f, tf_y_max: %f, tf_z_min: %f, tf_z_max: %f", minPoint_target.x, maxPoint_target.x, minPoint_target.y, maxPoint_target.y, minPoint_target.z, maxPoint_target.z);
+  // calculate area of intersection
   double intersectArea = (x_max - x_min) * (y_max - y_min) * (z_max - z_min);
   double targetArea = (maxPoint_target.x - minPoint_target.x) * (maxPoint_target.y - minPoint_target.y) * (maxPoint_target.z - minPoint_target.z);
   return intersectArea / targetArea;
@@ -329,9 +330,9 @@ void Track::plotResult(ResultVector rv){
 
     writeFile << stamp
               << id
-              << centroid(0)
-              << centroid(1)
-              << centroid(2) << endrow;
+              << (minPoint.x + maxPoint.x) / 2
+              << (minPoint.y + maxPoint.y) / 2
+              << (minPoint.z + maxPoint.z) / 2 << endrow;
   }
   //ROS_INFO("Cluster Size: %d", (int)pcVec.size());
   //ROS_INFO("Marker Array Size: %d", (int)boxArray.markers.size());
