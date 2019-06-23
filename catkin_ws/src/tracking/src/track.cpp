@@ -124,7 +124,7 @@ void Track::process_data(void){
           if(dist < centroidDistThres){
             match = true;
             match_index = source_count;
-          }
+          }// 
           else if(calculate_intersection_ratio(clusV_source.at(source_count), clusV_target.at(target_count), tf) > IoSThres){
             match = true;
             match_index = source_count;
@@ -136,7 +136,7 @@ void Track::process_data(void){
           double speed_x = (ct(0) - cs(0)) / time_diff;
           double speed_y = (ct(1) - cs(1)) / time_diff;
           double speed_z = (ct(2) - cs(2)) / time_diff;
-          ROS_INFO("s_x:%f, s_y:%f, s_z:%f", speed_x, speed_y, speed_z);
+          //ROS_INFO("s_x:%f, s_y:%f, s_z:%f", speed_x, speed_y, speed_z);
           ResultTuple t = make_tuple(time_target, id, ct, clusV_target.at(target_count), speed_x, speed_y, speed_z);
           rv.push_back(t);
         }
@@ -256,8 +256,8 @@ double Track::calculate_intersection_ratio(const PointCloudXYZI cloud_source, co
   PointXYZI minPoint_source, minPoint_target, maxPoint_source, maxPoint_target;
   getMinMax3D(cloud_source, minPoint_source, maxPoint_source);
   getMinMax3D(cloud_target, minPoint_target, maxPoint_target);
-  Vector4f min_xyz = tf * Vector4f(minPoint_source.x, minPoint_source.y, minPoint_source.z, 0);
-  Vector4f max_xyz = tf * Vector4f(maxPoint_source.x, maxPoint_source.y, maxPoint_source.z, 0);
+  Vector4f min_xyz = tf * Vector4f(minPoint_source.x, minPoint_source.y, minPoint_source.z, 1);
+  Vector4f max_xyz = tf * Vector4f(maxPoint_source.x, maxPoint_source.y, maxPoint_source.z, 1);
   double x_min = max(min_xyz(0), minPoint_target.x);
   double x_max = min(max_xyz(0), maxPoint_target.x);
   double y_min = max(min_xyz(1), minPoint_target.y);

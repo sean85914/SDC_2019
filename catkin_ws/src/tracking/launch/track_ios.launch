@@ -20,5 +20,5 @@
     <param name="IoSThres" value="$(arg ios_thres" />
   </node>
   <!--node pkg="rosbag" type="play" name="play" args="$(find tracking)/bag/tracking_1.bag -l -r 0.1 -/-clock" output="screen"/-->
-  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find tracking)/config/rviz.rviz"/>
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find tracking)/config/rviz_ios.rviz"/>
 </launch>

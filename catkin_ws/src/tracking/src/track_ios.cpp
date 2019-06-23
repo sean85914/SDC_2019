@@ -261,8 +261,8 @@ double Track::calculate_intersection_ratio(const PointCloudXYZI cloud_source, co
   PointXYZI minPoint_source, minPoint_target, maxPoint_source, maxPoint_target;
   getMinMax3D(cloud_source, minPoint_source, maxPoint_source);
   getMinMax3D(cloud_target, minPoint_target, maxPoint_target);
-  Vector4f min_xyz = tf * Vector4f(minPoint_source.x, minPoint_source.y, minPoint_source.z, 0);
-  Vector4f max_xyz = tf * Vector4f(maxPoint_source.x, maxPoint_source.y, maxPoint_source.z, 0);
+  Vector4f min_xyz = tf * Vector4f(minPoint_source.x, minPoint_source.y, minPoint_source.z, 1);
+  Vector4f max_xyz = tf * Vector4f(maxPoint_source.x, maxPoint_source.y, maxPoint_source.z, 1);
   double x_min = max(min_xyz(0), minPoint_target.x);
   double x_max = min(max_xyz(0), maxPoint_target.x);
   double y_min = max(min_xyz(1), minPoint_target.y);
