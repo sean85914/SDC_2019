@@ -1,6 +1,7 @@
 // C++ STL
 #include <thread> // std::thread, C++11
-#include <algorithm>    // std::min_element
+#include <algorithm>   // std::min_element
+#include <map> // std::map
 // Boost
 #include <boost/filesystem.hpp>
 // ROS
@@ -74,29 +75,36 @@ class Localization{
   double last_x, last_y; // Last GPS reported position
   double rough_x, rough_y, rough_z; // Rough GPS reported position
   double first_yaw; // First rotate angle
-  double dx, dy;
+  double dx, dy, dz, x, y, z;
   double min_dis;
   double radius; // Pointcloud search radius
   double length; // Length for passThrough to build local map
   double time_offset; // Time offset for rotating
   double ndtResolution;
   double ndtStepSize;
-  const double VG_SIZE = 0.25f; // Voxelgrid leaf size
+  double vg_scan_size;
+  const double VG_MAP_SIZE = 0.5f; // Voxelgrid leaf size for map
   const double FREQ = 0.5f; // Frequency fot publishing map pointcloud, 2 seconds
   const double CONVERGE_SCORE = 0.15f; // Score to consider as converged of registration (i.e., approch to ground truth)
+  const double BAD_REGISTRATION_SCORE = 1.0f; // Registration score greater then this will be consider as bad one
   const double INIT_LAT = 24.7855644226f; // Initial latitude, from slide
   const double INIT_LON = 120.997009277f; // Initial longiture, from slide
   const double INIT_ALT = 127.651f; // Initial altitude, from slide
   std::string filename; // Write file name
   const std::string package_path = ros::package::getPath("localization_13");
   const std::string FRAME = "map";
-  const std::vector<std::string> pcd_name_vec = 
+  /*const std::vector<std::string> pcd_name_vec = 
   {"first-0.pcd", "first-1.pcd", "first-2.pcd", "first-3.pcd", "first-4.pcd", "first-5.pcd",
    "first-6.pcd", "first-7.pcd", "first-8.pcd", "first-9.pcd", "first-10.pcd", "first-11.pcd",
    "first-12.pcd", "first-13.pcd", "first-14.pcd", "second-0.pcd", "second-1.pcd", "second-2.pcd",
    "submap_0.pcd", "submap_1.pcd", "submap_2.pcd", "submap_3.pcd", "submap_4.pcd", "submap_5.pcd",
    "submap_6.pcd", "submap_7.pcd", "submap_8.pcd", "submap_9.pcd", "submap_10.pcd", "submap_11.pcd",
    "submap_12.pcd", "submap_13.pcd", "submap_14.pcd", "submap_15.pcd","submap_16.pcd",
+   "submap_17.pcd","submap_18.pcd","submap_19.pcd","submap_20.pcd"};*/
+  const std::vector<std::string> pcd_name_vec = 
+  {"first-2.pcd", "first-3.pcd", "first-4.pcd", "first-5.pcd",
+   "first-6.pcd", "first-7.pcd", "first-14.pcd", "second-0.pcd", "second-1.pcd", "second-2.pcd",
+   "submap_14.pcd", "submap_15.pcd","submap_16.pcd",
    "submap_17.pcd","submap_18.pcd","submap_19.pcd","submap_20.pcd"};
   const std::vector<Coord> to_visit = 
   {std::make_pair(0, 0), 
@@ -170,8 +178,9 @@ int main(int argc, char** argv)
 */
 
 Localization::Localization(ros::NodeHandle nh, ros::NodeHandle pnh): 
-  nh_(nh), pnh_(pnh), counter(0), status(false), removeGround(true), 
-  removeOutlier(false), passThrough(true), skip_mode(false), getAngle(false), skip_counter(0),
+  nh_(nh), pnh_(pnh), status(false), removeGround(true), 
+  removeOutlier(false), passThrough(true), skip_mode(false), getAngle(false),
+  counter(0), skip_counter(0), dx(0.0), dy(0.0), dz(0.0), x(0.0), y(0.0), z(0.0),
   earth(GeographicLib::Constants::WGS84_a(), GeographicLib::Constants::WGS84_f()),
   proj(INIT_LAT, INIT_LON, INIT_ALT, earth)
 {
@@ -180,6 +189,7 @@ Localization::Localization(ros::NodeHandle nh, ros::NodeHandle pnh):
   if(!pnh_.getParam("skip_num", skip_num)) skip_num = 0; ROS_INFO("skip_num: %d", skip_num);
   if(!pnh_.getParam("radius", radius)) radius = 30.0f; ROS_INFO("radius: %f", radius);
   if(!pnh_.getParam("length", length)) length = 100.0f; ROS_INFO("length: %f", length);
+  if(!pnh_.getParam("vg_scan_size", vg_scan_size)) vg_scan_size = 0.40f; ROS_INFO("vg_scan_size: %f", vg_scan_size);
   if(!pnh_.getParam("ndtResolution", ndtResolution)) ndtResolution = 1.0f; ROS_INFO("ndtResolution: %f", ndtResolution);
   if(!pnh_.getParam("ndtStepSize", ndtStepSize)) ndtStepSize = 6.0f; ROS_INFO("ndtStepSize: %f", ndtStepSize);
   if(!pnh_.getParam("use_icp", use_icp)) use_icp = true; ROS_INFO("use_icp: %s", (use_icp?"true":"false"));
@@ -193,7 +203,7 @@ Localization::Localization(ros::NodeHandle nh, ros::NodeHandle pnh):
     if(!boost::filesystem::exists(direct))  boost::filesystem::create_directory(direct);
   }
   guess = Eigen::Matrix4f::Identity();
-  vg.setLeafSize(VG_SIZE, VG_SIZE, VG_SIZE);
+  vg.setLeafSize(VG_MAP_SIZE, VG_MAP_SIZE, VG_MAP_SIZE);
   if(use_icp){
     icp.setMaximumIterations(MAX_ITER);
     icp.setTransformationEpsilon(1e-9);
@@ -201,7 +211,7 @@ Localization::Localization(ros::NodeHandle nh, ros::NodeHandle pnh):
   } else{
     ndt.setMaximumIterations(MAX_ITER);
     ndt.setTransformationEpsilon(1e-3);
-    ndt.setEuclideanFitnessEpsilon(1e-3);
+    ndt.setEuclideanFitnessEpsilon(1e-5);
     ndt.setStepSize(ndtStepSize); // XXX what is this parameter means?
     ndt.setResolution(ndtResolution); // XXX what is this parameter means?
     // Use ICP to fit first scan
@@ -219,6 +229,8 @@ Localization::Localization(ros::NodeHandle nh, ros::NodeHandle pnh):
   } ROS_INFO("Successfully load all map, there are %d points", (int)map_pcPtr->points.size());
   if(save_pcd) {pcl::io::savePCDFileBinary(package_path+"/scan/"+"map.pcd", *map_pcPtr); ROS_INFO("Map saved.");}
   ROS_INFO("Map downsampling..."); vg.setInputCloud(map_pcPtr); vg.filter(*map_pcPtr);
+  if(save_pcd) {pcl::io::savePCDFileBinary(package_path+"/scan/"+"map_downsampled.pcd", *map_pcPtr); ROS_INFO("Map saved.");}
+  vg.setLeafSize(vg_scan_size, vg_scan_size, vg_scan_size);
   ROS_INFO("After downsampling, there are %d points", (int)map_pcPtr->points.size());
   sub_pc = nh_.subscribe("points_raw", 1, &Localization::callback_pc, this);
   sub_gps = nh_.subscribe("fix", 1, &Localization::callback_gps, this);
@@ -427,6 +439,7 @@ void Localization::processData(void){
     // First scan, which is most important
     if(thread_count==0){ 
       if(!getAngle) continue;
+      int stuck_counter = 0;
       double min_score = 1e6; Eigen::Matrix4f best_tf;
       last_x = position[0]; last_y = position[1]; // Put into last data placeholder
       guess(0, 0) = cos(first_yaw); guess(0, 1) = -sin(first_yaw); guess(0, 3) = position[0];
@@ -440,33 +453,51 @@ void Localization::processData(void){
           if(icp.getFitnessScore()<min_score){
             min_score = icp.getFitnessScore();
             best_tf = icp.getFinalTransformation();
-          } if(icp.getFitnessScore() < CONVERGE_SCORE){
+          } else {++stuck_counter;}
+          if(icp.getFitnessScore() < CONVERGE_SCORE){
             best_tf = icp.getFinalTransformation(); 
-            ROS_INFO("|[%d/%d]| (%f, %f)| min_score: %f|", (int)i+1, (int)to_visit.size(), to_visit[i].first, to_visit[i].second, min_score);
+            ROS_INFO("|[%d/%d]| (%f, %f)| min_score: %f| (%f, %f, %f)", 
+                      (int)i+1, (int)to_visit.size(), to_visit[i].first, to_visit[i].second, min_score,
+                      best_tf(0, 3), best_tf(1, 3), best_tf(2, 3));
             if(skip_num!=0) {
               skip_mode = true;
               ROS_INFO("\033[1;33mClose to ground truth, turn on skip mode to speed up processing...\033[0m");
             } // End if (skip_num!=0)
+            //if(!use_icp) ndt.setInputSource(scan.makeShared()); ndt.align(*result, best_tf); best_tf = ndt.getFinalTransformation();
             break;
           } // End if (icp.getFitnessScore() < CONVERGE_SCORE)
         } // End if
-        ROS_INFO("|[%d/%d]| (%f, %f)| min_score: %f|", (int)i+1, (int)to_visit.size(), to_visit[i].first, to_visit[i].second, min_score);
+        ROS_INFO("|[%d/%d]| (%f, %f)| min_score: %f| (%f, %f, %f)", 
+                  (int)i+1, (int)to_visit.size(), to_visit[i].first, to_visit[i].second, min_score,
+                  best_tf(0, 3), best_tf(1, 3), best_tf(2, 3));
+        if(stuck_counter==4) {ROS_WARN("Break since stuck!"); break;}
       } // End for
       guess = best_tf; pcl::copyPointCloud(scan, *result); pcl::transformPointCloud(*result, *result, guess);
       publishData(*result, corresponding_stamp, guess);
       position.clear(); scan.clear();
       myVector.erase(myVector.begin()); ++thread_count; // Erase first element and advence to next one
       double until_now = (ros::Time::now()-total_time).toSec();
-      time_offset = until_now;
-      ROS_INFO("Pop one item, totally %d items popped, %d remain! [After processing: %f seconds] [%f per frame]", 
+      time_offset = until_now; x= guess(0, 3); y = guess(1, 3); z = guess(2, 3);
+      ROS_INFO("Pop one item, totally %d items popped, \033[1;32m%d\033[0m remain! [After processing: %f seconds] [%f per frame]", 
                thread_count, (int)myVector.size(), until_now, until_now/thread_count); 
       continue;
     } // End if(thread_count==0) 
     ros::Time registrationTimer = ros::Time::now();
+    // ISSUE
     // NDT temps to wrongly match the bus around the Jhongjheng Hall
-    // Observation: The bus has a huge plane
+    // Observation: The bus has a huge plane and it locate at the third quadrant
     PointCloudXYZRGB plot_removal;
     if(!use_icp and min_dis>0){
+      // Consider only third quadrant
+      PointCloudXYZ third_quadrant;
+      std::map<size_t, size_t> indexMap;
+      size_t pointCounter = 0;
+      for(auto p: scan.points){
+        if(p.x<0.0f and p.y<0.0f){
+          indexMap.insert(std::pair<int, int>(third_quadrant.points.size(), pointCounter));
+          third_quadrant.points.push_back(p);
+        } ++pointCounter;
+      }
       pcl::ModelCoefficients::Ptr coefficients(new pcl::ModelCoefficients);
       pcl::PointIndices::Ptr inliers(new pcl::PointIndices);
       // Create the segmentation object
@@ -476,15 +507,17 @@ void Localization::processData(void){
       // Mandatory
       seg_plane.setModelType(pcl::SACMODEL_PLANE);
       seg_plane.setMethodType(pcl::SAC_RANSAC);
-      seg_plane.setDistanceThreshold(0.10f);
-      seg_plane.setInputCloud(scan.makeShared());
+      seg_plane.setDistanceThreshold(0.15f);
+      seg_plane.setInputCloud(third_quadrant.makeShared());
       seg_plane.segment(*inliers, *coefficients);
       PointCloudXYZ temp;
       for(size_t p_index=0; p_index<scan.points.size(); ++p_index){
         auto it = std::find(inliers->indices.begin(), inliers->indices.end(), p_index); // Find whether p_index in inlier
         if(it==inliers->indices.end()) temp.points.push_back(scan.points[p_index]); // Not found, then put into temp pointcloud
         else{
-          double px = scan.points[p_index].x, py = scan.points[p_index].y, pz = scan.points[p_index].z;
+          double px = scan.points[indexMap.at(p_index)].x, 
+                 py = scan.points[indexMap.at(p_index)].y, 
+                 pz = scan.points[indexMap.at(p_index)].z;
           if(px*px+py*py+pz*pz<=min_dis*min_dis){ // Inlier point distance less then threshold, then remove it from scan and put into plotting pointcloud
             pcl::PointXYZRGB p; p.x = px, p.y = py, p.z = pz, p.g = p.b = 255; plot_removal.points.push_back(p); // Cyan blue
           } else temp.points.push_back(scan.points[p_index]);
@@ -500,18 +533,27 @@ void Localization::processData(void){
       guess(0, 3) += position[0] - last_x; last_x = position[0]; 
       guess(1, 3) += position[1] - last_y; last_y = position[1];
     }*/
-    if(thread_count!=1) guess(0, 3) += dx; guess(1, 3) += dy; 
+    Eigen::Matrix4f tmp = guess;
+    if(thread_count!=1) tmp(0, 3) += dx; tmp(1, 3) += dy; 
     if(use_icp){
-      icp.setInputSource(scan.makeShared()); dx = guess(0, 3); dy = guess(1, 3);
-      icp.align(*result, guess);
+      icp.setInputSource(scan.makeShared()); x = guess(0, 3); y = guess(1, 3), z = guess(2, 3);
+      icp.align(*result, tmp);
       score = icp.getFitnessScore();
-      guess = icp.getFinalTransformation(); dx = guess(0, 3) - dx; dy = guess(1, 3) - dy;
+      guess = icp.getFinalTransformation(); dx = guess(0, 3) - x; dy = guess(1, 3) - y; dz = guess(2, 3) - z;
     } else{
-      ndt.setInputSource(scan.makeShared()); dx = guess(0, 3); dy = guess(1, 3);
-      ndt.align(*result, guess);
-      score = ndt.getFitnessScore();
-      guess = ndt.getFinalTransformation(); dx = guess(0, 3) - dx; dy = guess(1, 3) - dy;
-    }  ROS_INFO("%s takes time [\033[1;33m%f\033[0m] seconds", (use_icp?"ICP":"NDT"), (ros::Time::now()-registrationTimer).toSec());
+      ndt.setInputSource(scan.makeShared()); x = guess(0, 3); y = guess(1, 3);
+      ndt.align(*result, tmp);
+      score = ndt.getFitnessScore(); 
+      if(score >= BAD_REGISTRATION_SCORE){
+        guess = tmp;
+        ROS_WARN("Got bad registration result, use motion model to predict the position...| (%f, %f, %f)",
+                  ndt.getFinalTransformation()(0, 3), ndt.getFinalTransformation()(1, 3), ndt.getFinalTransformation()(2, 3));
+      } else{
+        guess = ndt.getFinalTransformation(); dx = guess(0, 3) - x; dy = guess(1, 3) - y; dz = guess(2, 3) - z;
+        //if(std::abs(dz)>=0.2f) {ROS_WARN("Weird up and down vibration detected, use last z..."); guess(2, 3) = z;}
+      }
+    }  ROS_INFO("%s takes time [\033[1;33m%f\033[0m] seconds| score: \033[1;31m%f\033[0m| (%f, %f, %f)", (use_icp?"ICP":"NDT"), 
+                 (ros::Time::now()-registrationTimer).toSec(), score, dx, dy, dz);
     if(score<CONVERGE_SCORE and skip_mode==false){
       // Loose the converge criteria
       if(use_icp){
@@ -519,7 +561,7 @@ void Localization::processData(void){
         icp.setEuclideanFitnessEpsilon(1e-3);
       } else{
         ndt.setTransformationEpsilon(1e-3);
-        ndt.setEuclideanFitnessEpsilon(1e-3);
+        ndt.setEuclideanFitnessEpsilon(1e-4);
       } if(skip_num!=0){
         ROS_INFO("\033[1;33mClose to ground truth, turn on skip mode to speed up processing...\033[0m");
         skip_mode = true;
@@ -534,7 +576,7 @@ void Localization::processData(void){
     }
     double until_now = (ros::Time::now()-total_time).toSec() - time_offset;
     position.clear(); scan.clear(); myVector.erase(myVector.begin()); ++thread_count; // Erase first element and advance to next one
-    ROS_INFO("Pop one item, totally %d items popped, %d remain! [After processing: %f seconds] [%f per frame]", 
+    ROS_INFO("Pop one item, totally %d items popped, \033[1;32m%d\033[0m remain! [After processing: %f seconds] [%f per frame]", 
              thread_count, (int)myVector.size(), until_now+time_offset, until_now/(thread_count-1));
   }
   ROS_INFO("Finish!");
