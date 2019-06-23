@@ -2,7 +2,8 @@ use_icp: false
 save_pcd: false
 skip_num: 0
 radius: 80.0
-length: 200.0
+length: 250.0
 ndtResolution: 1.0
 ndtStepSize: 3.0
-min_dis: -1.0
+min_dis: 20.0
+vg_scan_size: 1.5

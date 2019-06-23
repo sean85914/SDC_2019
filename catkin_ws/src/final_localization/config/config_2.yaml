@@ -6,3 +6,4 @@ length: 150.0
 ndtResolution: 1.0
 ndtStepSize: 3.0
 min_dis: -1.0
+vg_scan_size: 1.5
