@@ -99,6 +99,7 @@ class Track{
   void plotResult(ResultVector rv);
   void cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg);
   double calculate_intersection_ratio(const PointCloudXYZI cloud_source, const PointCloudXYZI cloud_target, const Matrix4f tf);
+
  public:
   Track(ros::NodeHandle nh, ros::NodeHandle pnh);
   bool getStatus(void) {return status;}

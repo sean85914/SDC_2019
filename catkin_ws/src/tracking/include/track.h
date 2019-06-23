@@ -52,7 +52,8 @@ typedef vector<PointCloudXYZI> ClusterVector;
 typedef vector<Vector4f> CentroidVector;
 typedef tuple<ros::Time, CentroidVector, ClusterVector, PointCloudXYZI> DataTuple;
 typedef vector<DataTuple> DataTupleVector;
-typedef tuple<ros::Time, int, Vector4f, PointCloudXYZI> ResultTuple;
+// stamp, id, centroid, cluster cloud, speed_x, speed_y, speed_z
+typedef tuple<ros::Time, int, Vector4f, PointCloudXYZI,double, double, double> ResultTuple;
 typedef vector<ResultTuple> ResultVector;
 typedef vector<ResultVector> ResultVectors;
 
@@ -70,6 +71,7 @@ class Track{
   double centroidDistThres; // distance threshod between centroid
   double clusterTolerance;
   double lower_z;
+  double IoSThres;
   const double MAX_HEIGHT = 0.2f;
   const double MAX_DIS = 15.0f;
   const double MIN_DIS = 2.0f;
@@ -95,6 +97,8 @@ class Track{
   pcl::IterativeClosestPoint<pcl::PointXYZI, pcl::PointXYZI> icp;
   void plotResult(ResultVector rv);
   void cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg);
+  double calculate_intersection_ratio(const PointCloudXYZI cloud_source, const PointCloudXYZI cloud_target, const Matrix4f tf);
+
  public:
   Track(ros::NodeHandle nh, ros::NodeHandle pnh);
   bool getStatus(void) {return status;}

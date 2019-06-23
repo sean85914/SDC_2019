@@ -89,7 +89,7 @@ void Track::process_data(void){
       icp.align(final_cloud, tf);
       tf = icp.getFinalTransformation();
       //cout << "ICP spent time: " << ros::Time::now() - icp_t << endl;
-      // plot pointcloud before and after icp
+      // plot final_cloud and target cloud
       PointCloud<PointXYZRGB> b_cloud, a_cloud;
       copyPointCloud(cloud_target, b_cloud);
       copyPointCloud(final_cloud, a_cloud);
@@ -102,32 +102,36 @@ void Track::process_data(void){
       aicp_pub.publish(a_cloud_msg);
       // match cluster by IoS
       for(int target_count=0; target_count < centV_target.size(); ++target_count){
-        if(RVector.size() == 0){
-          ROS_WARN("RVector got zero size!!");
-          continue;
-        }
         PointCloudXYZI cloud_t = clusV_target.at(target_count);
-        double misIoS = 0; 
-        double maxIoS = 0;
-        int match_id = -1;
+        double misIoS = 0; // IoS value for mis-classified cluster
+        double matchIoS = 0; // max IoS value of two cluster
+        double matchIoSInv = 0; // the inv IoS of the max IoS 
         bool match = false;
+        ResultTuple match_tuple;
         for(int source_count=0; source_count < rv_last.size(); ++source_count){
           ResultTuple rtuple_source = rv_last.at(source_count);
-          int id = get<1>(rtuple_source);
           PointCloudXYZI cloud_s = get<3>(rtuple_source);
           double IoS = calculate_intersection_ratio(cloud_s, cloud_t, tf);
           //ROS_INFO("IoS: %f", IoS);
           double inv_IoS = calculate_intersection_ratio(cloud_t, cloud_s, tf.inverse());
           if(inv_IoS > misIoS) misIoS = inv_IoS;
-          if(IoS > maxIoS){// matched
+          if(IoS > matchIoS){// matched, save id
             match = true;
-            maxIoS = IoS;
-            match_id = id;
+            matchIoS = IoS;
+            matchIoSInv = inv_IoS;
+            match_tuple = rtuple_source;
           }
         }
         if(match){
           match_count++;
-          ResultTuple t = make_tuple(time_target, match_id, centV_target.at(target_count), clusV_target.at(target_count));
+          ResultTuple t;
+          //if(matchIoS > matchIoSInv) // bounding box in this frame is smaller than last, save cluster at last frame
+            //t = make_tuple(time_target, get<1>(match_tuple), get<2>(match_tuple), get<3>(match_tuple));
+          //else // bounding box in this frame is larger than last, save cluster at this frame
+          PointCloudXYZI cluster = clusV_target.at(target_count);
+          for(auto &p : cluster)
+            p.intensity = 255*target_count/clusV_target.size();
+          t = make_tuple(time_target, get<1>(match_tuple), centV_target.at(target_count), cluster);
           rv.push_back(t);
         }
         else{// no match, could be mis-cluster or new cluster

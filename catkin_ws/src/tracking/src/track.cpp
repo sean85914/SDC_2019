@@ -26,6 +26,7 @@ Track::Track(ros::NodeHandle nh, ros::NodeHandle pnh): nh_(nh), pnh_(pnh){
   if(!pnh_.getParam("clusterDistThres", clusterDistThres)) clusterDistThres = 30.0f; ROS_INFO("clusterDistThres: %f", clusterDistThres);
   if(!pnh_.getParam("centroidDistThres", centroidDistThres)) centroidDistThres = 1.0f; ROS_INFO("centroidDistThres: %f", centroidDistThres);
   if(!pnh_.getParam("filename", filename)) filename="result"; ROS_INFO("filename: %s", filename.c_str());
+  if(!pnh_.getParam("IoSThres", IoSThres)) IoSThres=0.5f; ROS_INFO("IoSThres: %f", IoSThres);
   clusterTolerance = 0.4f;
   writeFile.setFileName(package_path + "/" + filename + ".csv");
   ROS_INFO("[%s] Node ready!", ros::this_node::getName().c_str());
@@ -61,7 +62,7 @@ void Track::process_data(void){
     if(firstProcess){
       firstProcess = false;
       for(int count=0; count<centV_source.size(); ++count){
-        ResultTuple rt = make_tuple(time_source, count, centV_source.at(count), clusV_source.at(count));
+        ResultTuple rt = make_tuple(time_source, count, centV_source.at(count), clusV_source.at(count), 0.0f, 0.0f, 0.0f);
         rv.push_back(rt);
       }
       RVector.push_back(rv);
@@ -72,6 +73,7 @@ void Track::process_data(void){
       ROS_INFO("process_data, size:%d", (int)TupleVector.size());
       DataTuple tuple_target = TupleVector.at(1);
       Time time_target = get<0>(tuple_target);
+      double time_diff = double(time_target.sec - time_source.sec) + double(time_target.nsec - time_source.nsec)*1e-9;
       CentroidVector centV_target = get<1>(tuple_target);
       ClusterVector clusV_target = get<2>(tuple_target);
       PointCloudXYZI cloud_source = get<3>(tuple_source);
@@ -97,7 +99,7 @@ void Track::process_data(void){
       bicp_pub.publish(b_cloud_msg);
       aicp_pub.publish(a_cloud_msg);
 
-      // Find centroid pair 
+      // Find centroid pair by closest distance
       int no_match_count = 0;
       ros::Time t = ros::Time::now();
       for(int target_count=0; target_count < centV_target.size(); ++target_count){
@@ -109,27 +111,44 @@ void Track::process_data(void){
         v_last = RVector.back();
         int idMax = get<1>(v_last.at(v_last.size() - 1));
         bool match = false;
+        int match_index = -1;
         Vector4f ct = centV_target.at(target_count);
         for(int source_count=0; source_count < centV_source.size(); ++source_count){
           Vector4f cs = centV_source.at(source_count);
           cs = tf * cs;
+          double speed_x = get<4>(v_last.at(source_count));
+          double speed_y = get<5>(v_last.at(source_count));
+          double speed_z = get<6>(v_last.at(source_count));
+          //double dist = sqrt(pow(ct(0)-cs(0)-speed_x*time_diff, 2) + pow(ct(1)-cs(1)-speed_y*time_diff, 2) + pow(ct(2)-cs(2)-speed_z*time_diff, 2));
           double dist = sqrt(pow(ct(0)-cs(0), 2) + pow(ct(1)-cs(1), 2) + pow(ct(2)-cs(2), 2));
           if(dist < centroidDistThres){
             match = true;
-            int id = get<1>(v_last.at(source_count));
-            ResultTuple t = make_tuple(time_target, id, ct, clusV_target.at(target_count));
-            rv.push_back(t);
+            match_index = source_count;
+          }
+          else if(calculate_intersection_ratio(clusV_source.at(source_count), clusV_target.at(target_count), tf) > IoSThres){
+            match = true;
+            match_index = source_count;
           }
         }
-        if(!match){// Cluster that isn't existed at last frame
+        if(match){
+          int id = get<1>(v_last.at(match_index));
+          Vector4f cs = tf * centV_source.at(match_index);
+          double speed_x = (ct(0) - cs(0)) / time_diff;
+          double speed_y = (ct(1) - cs(1)) / time_diff;
+          double speed_z = (ct(2) - cs(2)) / time_diff;
+          ROS_INFO("s_x:%f, s_y:%f, s_z:%f", speed_x, speed_y, speed_z);
+          ResultTuple t = make_tuple(time_target, id, ct, clusV_target.at(target_count), speed_x, speed_y, speed_z);
+          rv.push_back(t);
+        }
+        else{// Cluster that isn't existed at last frame
           int id = idMax + no_match_count + 1;
-          ResultTuple t = make_tuple(time_target, id, ct, clusV_target.at(target_count));
+          ResultTuple t = make_tuple(time_target, id, ct, clusV_target.at(target_count), 0.0f, 0.0f, 0.0f);
           rv.push_back(t);
           no_match_count++;
         }
       }
       RVector.push_back(rv);
-      //ROS_INFO("%d clusters are matched!, %d cluster aren't matched", (int)rv.size() - no_match_count, no_match_count);
+      ROS_INFO("%d clusters are matched!, %d cluster aren't matched", (int)rv.size() - no_match_count, no_match_count);
       // Remove the first element
       TupleVector.erase(TupleVector.begin());
     }
@@ -233,6 +252,26 @@ void Track::cb_lidar(const sensor_msgs::PointCloud2ConstPtr &lidarMsg){
   //cout << "PointCloud Filtering Process Time " << time_end-time_start << endl;
 }
 
+double Track::calculate_intersection_ratio(const PointCloudXYZI cloud_source, const PointCloudXYZI cloud_target, const Matrix4f tf){
+  PointXYZI minPoint_source, minPoint_target, maxPoint_source, maxPoint_target;
+  getMinMax3D(cloud_source, minPoint_source, maxPoint_source);
+  getMinMax3D(cloud_target, minPoint_target, maxPoint_target);
+  Vector4f min_xyz = tf * Vector4f(minPoint_source.x, minPoint_source.y, minPoint_source.z, 0);
+  Vector4f max_xyz = tf * Vector4f(maxPoint_source.x, maxPoint_source.y, maxPoint_source.z, 0);
+  double x_min = max(min_xyz(0), minPoint_target.x);
+  double x_max = min(max_xyz(0), maxPoint_target.x);
+  double y_min = max(min_xyz(1), minPoint_target.y);
+  double y_max = min(max_xyz(1), maxPoint_target.y);
+  double z_min = max(min_xyz(2), minPoint_target.z);
+  double z_max = min(max_xyz(2), maxPoint_target.z);
+  if(x_max < x_min or y_max < y_min or z_max < z_min) return 0;
+  //ROS_INFO("x_min: %f, x_max: %f, y_min: %f, y_max: %f, z_min: %f, z_max: %f",min_xyz(0), max_xyz(0), min_xyz(1), max_xyz(1), min_xyz(2), max_xyz(2));
+  //ROS_INFO("tf_x_min: %f, tf_x_max: %f, tf_y_min: %f, tf_y_max: %f, tf_z_min: %f, tf_z_max: %f", minPoint_target.x, maxPoint_target.x, minPoint_target.y, maxPoint_target.y, minPoint_target.z, maxPoint_target.z);
+  double intersectArea = (x_max - x_min) * (y_max - y_min) * (z_max - z_min);
+  double targetArea = (maxPoint_target.x - minPoint_target.x) * (maxPoint_target.y - minPoint_target.y) * (maxPoint_target.z - minPoint_target.z);
+  return intersectArea / targetArea;
+}
+
 void Track::plotResult(ResultVector rv){
   visualization_msgs::MarkerArray boxArray, idArray;
   PointCloudXYZI clusterCloud;
@@ -281,8 +320,9 @@ void Track::plotResult(ResultVector rv){
     idMarker.pose.position.y = centroid(1);
     idMarker.pose.position.z = centroid(2);
     idMarker.pose.orientation.w = 1.0f;
-    idMarker.scale.z = 1.0f;
-    idMarker.color.r = idMarker.color.g = idMarker.color.b = idMarker.color.a = 1.0f;
+    idMarker.scale.z = 1.2f;
+    idMarker.color.b = idMarker.color.a = 1.0f;
+    idMarker.color.r = idMarker.color.g = 0.0f;
     idMarker.lifetime = Duration(1.0f);
     idMarker.text = to_string(id);
     idArray.markers.push_back(idMarker);
