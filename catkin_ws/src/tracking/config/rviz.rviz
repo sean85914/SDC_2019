@@ -7,7 +7,7 @@ Panels:
         - /Global Options1
         - /Status1
       Splitter Ratio: 0.5
-    Tree Height: 439
+    Tree Height: 430
   - Class: rviz/Selection
     Name: Selection
   - Class: rviz/Tool Properties
@@ -16,7 +16,7 @@ Panels:
       - /2D Nav Goal1
       - /Publish Point1
     Name: Tool Properties
-    Splitter Ratio: 0.588679016
+    Splitter Ratio: 0.5886790156364441
   - Class: rviz/Views
     Expanded:
       - /Current View1
@@ -26,7 +26,9 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: ""
+    SyncSource: PointCloud2
+Preferences:
+  PromptSaveOnExit: true
 Toolbars:
   toolButtonStyle: 2
 Visualization Manager:
@@ -38,7 +40,7 @@ Visualization Manager:
       Color: 160; 160; 164
       Enabled: false
       Line Style:
-        Line Width: 0.0299999993
+        Line Width: 0.029999999329447746
         Value: Lines
       Name: Grid
       Normal Cell Count: 0
@@ -55,7 +57,47 @@ Visualization Manager:
       Marker Topic: /tracking_node/box
       Name: MarkerArray
       Namespaces:
-        {}
+        box_0: true
+        box_1: true
+        box_10: true
+        box_11: true
+        box_12: true
+        box_13: true
+        box_14: true
+        box_15: true
+        box_16: true
+        box_17: true
+        box_18: true
+        box_19: true
+        box_2: true
+        box_20: true
+        box_21: true
+        box_22: true
+        box_23: true
+        box_24: true
+        box_25: true
+        box_26: true
+        box_27: true
+        box_28: true
+        box_29: true
+        box_3: true
+        box_30: true
+        box_31: true
+        box_32: true
+        box_33: true
+        box_34: true
+        box_35: true
+        box_36: true
+        box_37: true
+        box_38: true
+        box_39: true
+        box_4: true
+        box_40: true
+        box_5: true
+        box_6: true
+        box_7: true
+        box_8: true
+        box_9: true
       Queue Size: 100
       Value: true
     - Alpha: 1
@@ -73,15 +115,15 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: -0.00802196749
+      Max Intensity: -0.009602721780538559
       Min Color: 0; 0; 0
-      Min Intensity: -1.18725634
+      Min Intensity: -1.3784207105636597
       Name: PointCloud2
       Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.100000001
+      Size (m): 0.10000000149011612
       Style: Flat Squares
       Topic: /tracking_node/cluster
       Unreliable: false
@@ -93,7 +135,47 @@ Visualization Manager:
       Marker Topic: /tracking_node/id
       Name: MarkerArray
       Namespaces:
-        {}
+        id_0: true
+        id_1: true
+        id_10: true
+        id_11: true
+        id_12: true
+        id_13: true
+        id_14: true
+        id_15: true
+        id_16: true
+        id_17: true
+        id_18: true
+        id_19: true
+        id_2: true
+        id_20: true
+        id_21: true
+        id_22: true
+        id_23: true
+        id_24: true
+        id_25: true
+        id_26: true
+        id_27: true
+        id_28: true
+        id_29: true
+        id_3: true
+        id_30: true
+        id_31: true
+        id_32: true
+        id_33: true
+        id_34: true
+        id_35: true
+        id_36: true
+        id_37: true
+        id_38: true
+        id_39: true
+        id_4: true
+        id_40: true
+        id_5: true
+        id_6: true
+        id_7: true
+        id_8: true
+        id_9: true
       Queue Size: 100
       Value: true
     - Alpha: 1
@@ -106,7 +188,7 @@ Visualization Manager:
       Channel Name: intensity
       Class: rviz/PointCloud2
       Color: 255; 255; 255
-      Color Transformer: ""
+      Color Transformer: RGB8
       Decay Time: 0
       Enabled: false
       Invert Rainbow: false
@@ -115,11 +197,11 @@ Visualization Manager:
       Min Color: 0; 0; 0
       Min Intensity: 0
       Name: PointCloud2
-      Position Transformer: ""
+      Position Transformer: XYZ
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.100000001
+      Size (m): 0.10000000149011612
       Style: Flat Squares
       Topic: /tracking_node/before_icp
       Unreliable: false
@@ -138,7 +220,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: RGB8
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -149,13 +231,13 @@ Visualization Manager:
       Queue Size: 10
       Selectable: true
       Size (Pixels): 3
-      Size (m): 0.100000001
+      Size (m): 0.10000000149011612
       Style: Flat Squares
       Topic: /tracking_node/after_icp
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Class: rviz/Image
       Enabled: true
       Image Topic: /zed/right/image_raw_color
@@ -183,7 +265,10 @@ Visualization Manager:
     - Class: rviz/FocusCamera
     - Class: rviz/Measure
     - Class: rviz/SetInitialPose
+      Theta std deviation: 0.2617993950843811
       Topic: /initialpose
+      X std deviation: 0.5
+      Y std deviation: 0.5
     - Class: rviz/SetGoal
       Topic: /move_base_simple/goal
     - Class: rviz/PublishPoint
@@ -193,25 +278,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 44.5557404
+      Distance: 30.19944190979004
       Enable Stereo Rendering:
-        Stereo Eye Separation: 0.0599999987
+        Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -4.89462948
-        Y: -4.14904833
-        Z: 3.3710537
+        X: -10.165453910827637
+        Y: -4.488373756408691
+        Z: 0.02042435109615326
       Focal Shape Fixed Size: true
-      Focal Shape Size: 0.0500000007
+      Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
-      Near Clip Distance: 0.00999999978
-      Pitch: 0.610398829
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 5.61857462
+      Yaw: 0.5403873920440674
     Saved: ~
 Window Geometry:
   Displays:
@@ -221,7 +306,7 @@ Window Geometry:
   Hide Right Dock: true
   Image:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd00000004000000000000016a00000377fc0200000009fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000006100fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000002800000246000000d700fffffffb0000000a0049006d00610067006501000002740000012b0000001600fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f000002c4fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a005600690065007700730000000028000002c4000000ad00fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000073d0000003efc0100000002fb0000000800540069006d006501000000000000073d0000030000fffffffb0000000800540069006d00650100000000000004500000000000000000000005cd0000037700000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd00000004000000000000016a00000363fc0200000009fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003d00000239000000c900fffffffb0000000a0049006d006100670065010000027c000001240000001600fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261000000010000010f000002c4fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a005600690065007700730000000028000002c4000000a400fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e100000197000000030000073d0000003efc0100000002fb0000000800540069006d006501000000000000073d000002eb00fffffffb0000000800540069006d00650100000000000004500000000000000000000005cd0000036300000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:
@@ -232,4 +317,4 @@ Window Geometry:
     collapsed: true
   Width: 1853
   X: 67
-  Y: 28
+  Y: 27

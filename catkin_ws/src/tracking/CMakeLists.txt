@@ -162,6 +162,10 @@ add_executable(tracking_node src/track.cpp src/main.cpp)
 add_dependencies(tracking_node ${visualizer_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(tracking_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} )
 
+add_executable(tracking_ios_node src/track_ios.cpp src/main_ios.cpp)
+add_dependencies(tracking_ios_node ${visualizer_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(tracking_ios_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} )
+
 #############
 ## Install ##
 #############
