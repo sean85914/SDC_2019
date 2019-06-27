@@ -36,7 +36,7 @@ def main():
     marker.header.frame_id = "map"
     marker.type = Marker.LINE_STRIP
     marker.action = Marker.ADD
-    marker.scale.x = 0.5
+    marker.scale.x = 0.3
     marker.color.r = marker.color.b = marker.color.a = 1.0
     for i in range(len(data)):
         p = Point()

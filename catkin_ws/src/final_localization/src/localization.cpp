@@ -1,6 +1,5 @@
 // C++ STL
 #include <thread> // std::thread, C++11
-#include <algorithm>   // std::min_element
 #include <map> // std::map
 // Boost
 #include <boost/filesystem.hpp>
@@ -20,7 +19,6 @@
 #include <pcl/filters/filter.h> // RemoveNaN
 #include <pcl/kdtree/kdtree_flann.h> // KD tree
 #include <pcl/filters/voxel_grid.h> // VG
-//#include <pcl/filters/approximate_voxel_grid.h> // Approximate VG
 #include <pcl/registration/icp.h> // ICP
 #include <pcl/registration/ndt.h> // NDT
 #include <pcl/filters/passthrough.h> // passThrough
@@ -46,7 +44,6 @@ typedef pcl::PointCloud<pcl::PointXYZ>::Ptr PointCloudXYZPtr;
 typedef pcl::PointCloud<pcl::PointXYZRGB> PointCloudXYZRGB;
 typedef pcl::PointCloud<pcl::PointXYZRGB>::Ptr PointCloudXYZRGBPtr;
 typedef std::tuple<std::vector<double>, PointCloudXYZ, ros::Time> MyTuple;
-typedef std::pair<Eigen::Matrix4f, ros::Time> transformationAndStamp;
 typedef std::pair<double, double> Coord;
 
 /*
@@ -65,18 +62,17 @@ class Localization{
   bool use_icp; // Whether using icp, using ndt if false
   bool save_pcd; // If save pcd for each scan, from ROS parameter server
   bool removeGround; // If remove ground of scan
-  bool removeOutlier; // If remove outlier using statistical outlier removal
   bool passThrough; // If using passThrough filter to build local map pointcloud
   bool skip_mode; // If using skip mode, default is false, turn to true when low fitness error meet 
   int counter; // GPS frame counter
   int skip_num; // Skip number, only used when skip_mode turns on, from ROS parameter server
   int skip_counter;
   const int MAX_ITER = 1000; // Maximum iteration for pointcloud registration
-  double last_x, last_y; // Last GPS reported position
   double rough_x, rough_y, rough_z; // Rough GPS reported position
   double first_yaw; // First rotate angle
   double dx, dy, dz, x, y, z;
   double min_dis;
+  double firstYaw_x, firstYaw_y;
   double radius; // Pointcloud search radius
   double length; // Length for passThrough to build local map
   double time_offset; // Time offset for rotating
@@ -93,21 +89,13 @@ class Localization{
   std::string filename; // Write file name
   const std::string package_path = ros::package::getPath("localization_13");
   const std::string FRAME = "map";
-  /*const std::vector<std::string> pcd_name_vec = 
-  {"first-0.pcd", "first-1.pcd", "first-2.pcd", "first-3.pcd", "first-4.pcd", "first-5.pcd",
-   "first-6.pcd", "first-7.pcd", "first-8.pcd", "first-9.pcd", "first-10.pcd", "first-11.pcd",
-   "first-12.pcd", "first-13.pcd", "first-14.pcd", "second-0.pcd", "second-1.pcd", "second-2.pcd",
-   "submap_0.pcd", "submap_1.pcd", "submap_2.pcd", "submap_3.pcd", "submap_4.pcd", "submap_5.pcd",
-   "submap_6.pcd", "submap_7.pcd", "submap_8.pcd", "submap_9.pcd", "submap_10.pcd", "submap_11.pcd",
-   "submap_12.pcd", "submap_13.pcd", "submap_14.pcd", "submap_15.pcd","submap_16.pcd",
-   "submap_17.pcd","submap_18.pcd","submap_19.pcd","submap_20.pcd"};*/
   const std::vector<std::string> pcd_name_vec = 
   {"first-2.pcd", "first-3.pcd", "first-4.pcd", "first-5.pcd",
    "first-6.pcd", "first-7.pcd", "first-14.pcd", "second-0.pcd", "second-1.pcd", "second-2.pcd",
    "submap_14.pcd", "submap_15.pcd","submap_16.pcd",
    "submap_17.pcd","submap_18.pcd","submap_19.pcd","submap_20.pcd"};
   const std::vector<Coord> to_visit = 
-  {std::make_pair(0, 0), 
+  {/*std::make_pair(0, 0),*/
    std::make_pair(1.0f, 1.0f), std::make_pair(2.0f, 2.0f), std::make_pair(3.0f, 3.0f),
    std::make_pair(1.0f, -1.0f), std::make_pair(2.0f, -2.0f), std::make_pair(3.0f, -3.0f),
    std::make_pair(-1.0f, 1.0f), std::make_pair(-2.0f, 2.0f), std::make_pair(-3.0f, 3.0f),
@@ -129,7 +117,6 @@ class Localization{
   visualization_msgs::Marker marker_raw, marker_localization;
   PointCloudXYZPtr map_pcPtr;
   pcl::VoxelGrid<pcl::PointXYZ> vg; // Voxel grid downsampling
-  //pcl::ApproximateVoxelGrid<pcl::PointXYZ> vg; // Voxel grid downsampling, seems bad
   pcl::IterativeClosestPoint<pcl::PointXYZ, pcl::PointXYZ> icp; // ICP object
   pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt; // NDT object
   void callback_pc(const sensor_msgs::PointCloud2ConstPtr&);
@@ -179,7 +166,7 @@ int main(int argc, char** argv)
 
 Localization::Localization(ros::NodeHandle nh, ros::NodeHandle pnh): 
   nh_(nh), pnh_(pnh), status(false), removeGround(true), 
-  removeOutlier(false), passThrough(true), skip_mode(false), getAngle(false),
+  passThrough(true), skip_mode(false), getAngle(false), firstYaw_x(0.0), firstYaw_y(0.0),
   counter(0), skip_counter(0), dx(0.0), dy(0.0), dz(0.0), x(0.0), y(0.0), z(0.0),
   earth(GeographicLib::Constants::WGS84_a(), GeographicLib::Constants::WGS84_f()),
   proj(INIT_LAT, INIT_LON, INIT_ALT, earth)
@@ -204,20 +191,15 @@ Localization::Localization(ros::NodeHandle nh, ros::NodeHandle pnh):
   }
   guess = Eigen::Matrix4f::Identity();
   vg.setLeafSize(VG_MAP_SIZE, VG_MAP_SIZE, VG_MAP_SIZE);
-  if(use_icp){
-    icp.setMaximumIterations(MAX_ITER);
-    icp.setTransformationEpsilon(1e-9);
-    icp.setEuclideanFitnessEpsilon(1e-9);
-  } else{
+  icp.setMaximumIterations(MAX_ITER);
+  icp.setTransformationEpsilon(1e-9);
+  icp.setEuclideanFitnessEpsilon(1e-9);
+  if(!use_icp){
     ndt.setMaximumIterations(MAX_ITER);
-    ndt.setTransformationEpsilon(1e-3);
-    ndt.setEuclideanFitnessEpsilon(1e-5);
+    ndt.setTransformationEpsilon(1e-6);
+    ndt.setEuclideanFitnessEpsilon(1e-6);
     ndt.setStepSize(ndtStepSize); // XXX what is this parameter means?
     ndt.setResolution(ndtResolution); // XXX what is this parameter means?
-    // Use ICP to fit first scan
-    icp.setMaximumIterations(MAX_ITER);
-    icp.setTransformationEpsilon(1e-9);
-    icp.setEuclideanFitnessEpsilon(1e-9);
   }
   map_pcPtr = PointCloudXYZPtr (new PointCloudXYZ);
   PointCloudXYZPtr tempPtr (new PointCloudXYZ);
@@ -254,7 +236,7 @@ Localization::Localization(ros::NodeHandle nh, ros::NodeHandle pnh):
   marker_localization.action = visualization_msgs::Marker::ADD;
   marker_localization.color.r = marker_localization.color.g = marker_localization.color.a = 1.0f;
   marker_localization.pose.orientation.w = 1.0f;
-  marker_localization.scale.x = 0.5f;
+  marker_localization.scale.x = 0.3f;
 }
 
 void Localization::publishMapPC(void){
@@ -286,12 +268,13 @@ void Localization::callback_gps(const sensor_msgs::NavSatFixConstPtr &gpsPtr){
   marker_raw.points.push_back(p);
   if(counter==0) {
     ROS_INFO("First GPS data| X: %f| Y: %f| Z: %f", rough_x, rough_y, rough_z);
-    dx += rough_x; dy += rough_y;
+    firstYaw_x += rough_x; firstYaw_y += rough_y;
   }
   if(counter==2) { // Compare first and third GPS data and form the rotating angle
     ROS_INFO("Third GPS data| X: %f| Y: %f| Z: %f", rough_x, rough_y, rough_z);
-    dx = rough_x - dx; dy = rough_y - dy;
-    first_yaw = atan2(dy, dx) - deg2rad(120.0f); ROS_INFO("Predicted first_yaw: %f (rad) [%f (deg)]", first_yaw, rad2deg(first_yaw));
+    firstYaw_x = rough_x - firstYaw_x; firstYaw_y = rough_y - firstYaw_y;
+    first_yaw = atan2(firstYaw_y, firstYaw_x) - deg2rad(120.0f); 
+    ROS_INFO("Predicted first_yaw: %f (rad) [%f (deg)]", first_yaw, rad2deg(first_yaw));
     getAngle = true;
   }
   ++counter;
@@ -351,13 +334,6 @@ void Localization::callback_pc(const sensor_msgs::PointCloud2ConstPtr &pcPtr){
     indiceFilter.setNegative(true);
     indiceFilter.filter(*scan);
   }
-  if(removeOutlier){ // remove outlier
-    pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
-    sor.setInputCloud(scan);
-    sor.setMeanK(10);
-    sor.setStddevMulThresh(1.0);
-    sor.filter(*scan);
-  }
   std::vector<double> gpsData{rough_x, rough_y, rough_z};
   MyTuple tuple = std::make_tuple(gpsData, *scan, pcPtr->header.stamp);
   myVector.push_back(tuple);
@@ -366,7 +342,7 @@ void Localization::callback_pc(const sensor_msgs::PointCloud2ConstPtr &pcPtr){
 void Localization::publishData(PointCloudXYZ icp_result, ros::Time stamp, Eigen::Matrix4f transformation){
   PointCloudXYZRGB resultPlot;
   pcl::copyPointCloud(icp_result, resultPlot);
-  for(auto p=resultPlot.points.begin(); p!=resultPlot.points.end(); ++p) p->r = 255;
+  for(auto& p: resultPlot.points) p.r = 255;
   // Publish registration result
   sensor_msgs::PointCloud2 pcout;
   pcl::toROSMsg(resultPlot, pcout);
@@ -441,7 +417,6 @@ void Localization::processData(void){
       if(!getAngle) continue;
       int stuck_counter = 0;
       double min_score = 1e6; Eigen::Matrix4f best_tf;
-      last_x = position[0]; last_y = position[1]; // Put into last data placeholder
       guess(0, 0) = cos(first_yaw); guess(0, 1) = -sin(first_yaw); guess(0, 3) = position[0];
       guess(1, 0) = sin(first_yaw); guess(1, 1) = cos(first_yaw); guess(1, 3) = position[1];
       for(size_t i=0; i<to_visit.size(); ++i){
@@ -528,11 +503,6 @@ void Localization::processData(void){
       pcl::copyPointCloud(temp, scan);
     }
     /* Motion Model */
-    // Roughly guess toward the vector provided by GPS
-    /*if(position.size()==3){ // Weird but may occur that size is 0
-      guess(0, 3) += position[0] - last_x; last_x = position[0]; 
-      guess(1, 3) += position[1] - last_y; last_y = position[1];
-    }*/
     Eigen::Matrix4f tmp = guess;
     if(thread_count!=1) tmp(0, 3) += dx; tmp(1, 3) += dy; 
     if(use_icp){
@@ -561,14 +531,14 @@ void Localization::processData(void){
         icp.setEuclideanFitnessEpsilon(1e-3);
       } else{
         ndt.setTransformationEpsilon(1e-3);
-        ndt.setEuclideanFitnessEpsilon(1e-4);
+        ndt.setEuclideanFitnessEpsilon(1e-3);
       } if(skip_num!=0){
         ROS_INFO("\033[1;33mClose to ground truth, turn on skip mode to speed up processing...\033[0m");
         skip_mode = true;
       }
     }
     publishData(*result, corresponding_stamp, guess);
-    if(!use_icp){
+    if(!use_icp and min_dis>0.0f){
       // Publish removed points
       pcl::transformPointCloud(plot_removal, plot_removal, guess);
       sensor_msgs::PointCloud2 pcout;
